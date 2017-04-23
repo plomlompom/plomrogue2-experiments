@@ -22,7 +22,8 @@ dialogue:
 The following commands can be sent from client to server:
 
 * `QUIT` – closes the connection
-* `FIB` followed by positive integers; for each such integer n, calculates the
-  n-th Fibonacci number (this allows for testing parallel CPU-heavy computation)
+* `FIB` followed by positive integers (all tokens separated by ` `; for each
+  such integer n, calculates th nn-th Fibonacci number (this allows for testing
+  parallel CPU-heavy computation)
 
 See `./requirements.txt` for the dependencies.
