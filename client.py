@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 import urwid
-import plom_socket_io 
+import plom_socket_io
 import socket
 import threading
 
 
-class RecvThread(threading.Thread):
-    """Background thread that delivers messages from the socket to urwid.
+def recv_loop(socket, urwid_pipe_write_fd, server_output):
+    """Loop to receive messages from socket and deliver them to urwid.
 
     The message transfer to urwid is a bit weird. The urwid developers warn
     against sharing urwid resources among threads, and recommend using urwid's
     watch_pipe mechanism: using a pipe from non-urwid threads into a single
-    urwid thread. We could pipe the recv output directly, but then we get
+    urwid thread. We could pipe socket.recv output directly, but then we get
     complicated buffering situations here as well as in the urwid code that
     receives the pipe content. It's much easier to update a third resource
     (server_output, which references an object that's also known to the urwid
@@ -20,24 +20,15 @@ class RecvThread(threading.Thread):
     (urwid_pipe_write_fd) to trigger the urwid code to pull the message in from
     that third resource. We send a single b' ' through the pipe to trigger it.
     """
-
-    def __init__(self, socket, urwid_pipe_write_fd, server_output):
-        super().__init__()
-        self.socket = socket
-        self.urwid_pipe = urwid_pipe_write_fd
-        self.server_output = server_output
-
-    def run(self):
-        """On message receive, write to self.server_output, ping urwid pipe."""
-        import os
-        for msg in plom_socket_io.recv(self.socket):
-            self.server_output[0] = msg
-            os.write(self.urwid_pipe, b' ')
+    import os
+    for msg in plom_socket_io.recv(socket):
+        server_output[0] = msg
+        os.write(urwid_pipe_write_fd, b' ')
 
 
 class InputHandler:
     """Helps delivering data from other thread to widget via message_container.
-    
+
     The whole class only exists to provide handle_input as a bound method, with
     widget and message_container pre-set, as (bound) handle_input is used as a
     callback in urwid's watch_pipe – which merely provides its callback target
@@ -63,7 +54,7 @@ class InputHandler:
         if self.message_container[0] == 'BYE':
             raise urwid.ExitMainLoop()
             return
-        self.widget.set_text('REPLY: ' + self.message_container[0])
+        self.widget.set_text('SERVER: ' + self.message_container[0])
 
 
 class SocketInputWidget(urwid.Filler):
@@ -91,7 +82,9 @@ loop = urwid.MainLoop(fill)
 server_output = ['']
 write_fd = loop.watch_pipe(getattr(InputHandler(txt, server_output),
                                    'handle_input'))
-thread = RecvThread(s, write_fd, server_output)
+thread = threading.Thread(target=recv_loop,
+                          kwargs={'socket': s, 'server_output': server_output,
+                                  'urwid_pipe_write_fd': write_fd})
 thread.start()
 
 loop.run()

@@ -1,3 +1,7 @@
+class BrokenSocketConnection(Exception):
+    pass
+
+
 def send(socket, message):
     """Send message via socket, encoded and delimited the way recv() expects.
 
@@ -26,9 +30,17 @@ def send(socket, message):
     data = escaped_message.encode()
     totalsent = 0
     while totalsent < len(data):
-        sent = socket.send(data[totalsent:])
-        if sent == 0:
-            raise RuntimeError('socket connection broken')
+        socket_broken = False
+        try:
+            sent = socket.send(data[totalsent:])
+            socket_broken = sent == 0
+        except OSError as err:
+            if err.errno == 9:  # "Bad file descriptor", when connection broken
+                socket_broken = True
+            else:
+                raise err
+        if socket_broken:
+            raise BrokenSocketConnection
         totalsent = totalsent + sent
 
 
@@ -48,7 +60,6 @@ def recv(socket):
     meaningful way; that's why we do our own message segmentation with $ as a
     delimiter.
     """
-    quit = False
     esc = False
     data = b''
     msg = b''
