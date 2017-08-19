@@ -6,7 +6,7 @@ import socket
 import threading
 
 
-class UrwidSetup():
+class UrwidSetup:
 
     def __init__(self, socket):
         """Build client urwid interface around socket communication.
@@ -23,13 +23,12 @@ class UrwidSetup():
         mechanism instead: using a pipe from non-urwid threads into a single
         urwid thread. We use self.recv_loop_thread to poll the socket, therein
         write socket.recv output to an object that is then linked to by
-        self.server_output (which is known the urwid thread), and then use the
+        self.server_output (which is known to the urwid thread), then use the
         pipe to urwid to trigger it pulling new data from self.server_output to
         handle via self.InputHandler. (We *could* pipe socket.recv output
         directly, but then we get complicated buffering situations here as well
-        as in the urwid code that receives the pipe output. It's much easier to
-        just tell the urwid code where it finds a full new server message to
-        handle.)
+        as in the urwid code that receives the pipe output. It's easier to just
+        tell the urwid code where it finds full new server messages to handle.)
         """
         self.socket = socket
         self.main_loop = urwid.MainLoop(self.setup_widgets())
