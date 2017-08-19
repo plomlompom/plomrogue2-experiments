@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import socketserver
-import plom_socket_io
 import threading
-import time
 import queue
 
 # Avoid "Address already in use" errors.
@@ -48,6 +46,8 @@ class IO_Handler(socketserver.BaseRequestHandler):
         to send replies back to), and optionally a third element for further
         instructions.
         """
+        import plom_socket_io
+
         def caught_send(socket, message):
             """Send message by socket, catch broken socket connection error."""
             try:
