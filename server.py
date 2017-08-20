@@ -98,6 +98,7 @@ class CommandHandler:
         self.queues_out = queues_out
         self.pool = Pool()
         self.world = World()
+        self.pool_result = None
 
     def send_to(self, connection_id, msg):
         """Send msg to client of connection_id."""
@@ -131,10 +132,21 @@ class CommandHandler:
         self.send_to(connection_id, reply)
 
     def cmd_inc(self, connection_id):
-        """Increment world.turn, send TURN_FINISHED, NEW_TURN to everyone."""
+        """Increment world.turn, send TURN_FINISHED, NEW_TURN to everyone.
+
+        To simulate game processing waiting times, a one second delay between
+        TURN_FINISHED and NEW_TURN occurs; after NEW_TURN, some expensive
+        calculations are started as pool processes that need to be finished
+        until a further INC finishes the turn.
+        """
+        from time import sleep
+        if self.pool_result is not None:
+            self.pool_result.wait()
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
+        sleep(1)
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
+        self.pool_result = self.pool.map_async(fib, (35,35))
 
     def cmd_get_turn(self, connection_id):
         """Send world.turn to caller."""
