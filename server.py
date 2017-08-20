@@ -93,9 +93,11 @@ def fib(n):
 
 class CommandHandler:
 
-    def __init__(self, world, queues_out):
-        self.world = world
+    def __init__(self, queues_out):
+        from multiprocessing import Pool
         self.queues_out = queues_out
+        self.pool = Pool()
+        self.world = World()
 
     def send_to(self, connection_id, msg):
         """Send msg to client of connection_id."""
@@ -112,7 +114,6 @@ class CommandHandler:
         Numbers are calculated in parallel as far as possible, using fib().
         A 'CALCULATING …' message is sent to caller before the result.
         """
-        from multiprocessing import Pool
         fib_fail = 'MALFORMED FIB REQUEST'
         if len(tokens) < 2:
             self.send_to(connection_id, fib_fail)
@@ -125,8 +126,7 @@ class CommandHandler:
                 self.send_to(connection_id, fib_fail)
                 return
         self.send_to(connection_id, 'CALCULATING …')
-        with Pool(len(numbers)) as p:
-            results = p.map(fib, numbers)
+        results = self.pool.map(fib, numbers)
         reply = ' '.join([str(r) for r in results])
         self.send_to(connection_id, reply)
 
@@ -188,8 +188,7 @@ def io_loop(q):
     sending out replies.
     """
     queues_out = {}
-    world = World()
-    command_handler = CommandHandler(world, queues_out)
+    command_handler = CommandHandler(queues_out)
     while True:
         x = q.get()
         command_type = x[0]
