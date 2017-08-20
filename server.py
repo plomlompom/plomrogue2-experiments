@@ -131,7 +131,8 @@ class CommandHandler:
         self.send_to(connection_id, reply)
 
     def cmd_inc(self, connection_id):
-        """Increment world.turn, send NEW_TURN message to all clients."""
+        """Increment world.turn, send TURN_FINISHED, NEW_TURN to everyone."""
+        self.send_all('TURN_FINISHED ' + str(self.world.turn))
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
 
