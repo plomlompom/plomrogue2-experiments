@@ -32,7 +32,7 @@ class UrwidSetup:
         """
         self.socket = socket
         self.main_loop = urwid.MainLoop(self.setup_widgets())
-        self.server_output = ['']
+        self.server_output = []
         input_handler = getattr(self.InputHandler(self.reply_widget,
                                                   self.map_widget,
                                                   self.server_output),
@@ -44,19 +44,19 @@ class UrwidSetup:
         """Return container widget with all widgets we want on our screen.
 
         Sets up an urwid.Pile inside a returned urwid.Filler; top to bottom:
-        - an EditToSocket widget, prefixing self.socket input with 'SEND: '
+        - an EditToSocketWidget, prefixing self.socket input with 'SEND: '
         - self.reply_widget, a urwid.Text widget printing self.socket replies
         - a 50-col wide urwid.Padding container for self.map_widget, which is
           to print clipped map representations
         """
-        edit_widget = self.EditToSocket(self.socket, 'SEND: ')
+        edit_widget = self.EditToSocketWidget(self.socket, 'SEND: ')
         self.reply_widget = urwid.Text('')
-        self.map_widget = urwid.Text('', wrap='clip')
+        self.map_widget = self.MapWidget('', wrap='clip')
         map_box = urwid.Padding(self.map_widget, width=50)
         widget_pile = urwid.Pile([edit_widget, self.reply_widget, map_box])
-        return urwid.Filler(widget_pile)
+        return urwid.Filler(widget_pile, valign='top')
 
-    class EditToSocket(urwid.Edit):
+    class EditToSocketWidget(urwid.Edit):
         """Extends urwid.Edit with socket to send input on 'enter' to."""
 
         def __init__(self, socket, *args, **kwargs):
@@ -69,6 +69,35 @@ class UrwidSetup:
                 return super().keypress(size, key)
             plom_socket_io.send(self.socket, self.edit_text)
             self.edit_text = ''
+
+    class MapWidget(urwid.Text):
+        """Stores/updates/draws game map."""
+        terrain_map = ' ' * 25
+        position = [0,0]
+
+        def draw_map(self):
+            """Draw map view from .terrain_map, .position."""
+            whole_map = []
+            for c in self.terrain_map:
+                whole_map += [c]
+            pos_i = self.position[0] * (5 + 1) + self.position[1]
+            whole_map[pos_i] = '@'
+            self.set_text(''.join(whole_map))
+
+        def update_terrain(self, terrain_map):
+            """Update self.terrain_map."""
+            self.terrain_map = terrain_map
+            self.draw_map()
+
+        def update_position_y(self, position_y_string):
+            """Update self.position[0]."""
+            self.position[0] = int(position_y_string)
+            self.draw_map()
+
+        def update_position_x(self, position_x_string):
+            """Update self.position[1]."""
+            self.position[1] = int(position_x_string)
+            self.draw_map()
 
     class InputHandler:
         """Delivers data from other thread to widget via message_container.
@@ -98,27 +127,33 @@ class UrwidSetup:
 
             If the message delivered is 'BYE', quits Urbit.
             """
-            if self.message_container[0] == 'BYE':
+            msg = self.message_container[0]
+            if msg == 'BYE':
                 raise urwid.ExitMainLoop()
                 return
-            self.widget1.set_text('SERVER: ' + self.message_container[0])
-            self.widget2.set_text('loremipsumdolorsitamet '
-                                  'loremipsumdolorsitamet'
-                                  'loremipsumdolorsitamet '
-                                  'loremipsumdolorsitamet\n'
-                                  'loremipsumdolorsitamet '
-                                  'loremipsumdolorsitamet')
+            if len(msg) > 8 and msg[:8] == 'TERRAIN ':
+                self.widget2.update_terrain(msg[8:])
+            elif len(msg) > 11 and msg[:11] == 'POSITION_Y ':
+                self.widget2.update_position_y(msg[11:])
+            elif len(msg) > 11 and msg[:11] == 'POSITION_X ':
+                self.widget2.update_position_x(msg[11:])
+            else:
+                self.widget1.set_text('SERVER: ' + msg)
+            del self.message_container[0]
 
     def recv_loop(self):
         """Loop to receive messages from socket and deliver them to urwid.
 
-        Writes finished messages from the socket to self.server_output[0],
-        then sends a single b' ' through self.urwid_pipe_write_fd to trigger
-        the urwid code to read from it.
+        Waits for self.server_output to become empty (this signals that the
+        input handler is finished / ready to receive new input), then writes
+        finished message from socket to self.server_output, then sends a single
+        b' ' through self.urwid_pipe_write_fd to trigger the input handler.
         """
         import os
         for msg in plom_socket_io.recv(self.socket):
-            self.server_output[0] = msg
+            while len(self.server_output) > 0:
+                pass
+            self.server_output += [msg]
             os.write(self.urwid_pipe_write_fd, b' ')
 
     def run(self):

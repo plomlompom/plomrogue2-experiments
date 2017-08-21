@@ -81,6 +81,8 @@ class IO_Handler(socketserver.BaseRequestHandler):
 
 class World:
     turn = 0
+    map_ = 'xxxxx\nx...x\nx.X.x\nx...x\nxxxxx'
+    player_pos = (3,3)
 
 
 def fib(n):
@@ -132,7 +134,7 @@ class CommandHandler:
         self.send_to(connection_id, reply)
 
     def cmd_inc(self, connection_id):
-        """Increment world.turn, send TURN_FINISHED, NEW_TURN to everyone.
+        """Increment world.turn, send game turn data to everyone.
 
         To simulate game processing waiting times, a one second delay between
         TURN_FINISHED and NEW_TURN occurs; after NEW_TURN, some expensive
@@ -146,6 +148,9 @@ class CommandHandler:
         sleep(1)
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
+        self.send_all('TERRAIN ' + self.world.map_)
+        self.send_all('POSITION_Y ' + str(self.world.player_pos[0]))
+        self.send_all('POSITION_X ' + str(self.world.player_pos[1]))
         self.pool_result = self.pool.map_async(fib, (35,35))
 
     def cmd_get_turn(self, connection_id):
