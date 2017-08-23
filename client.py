@@ -45,15 +45,15 @@ class UrwidSetup:
 
         Sets up an urwid.Pile inside a returned urwid.Filler; top to bottom:
         - an EditToSocketWidget, prefixing self.socket input with 'SEND: '
-        - self.reply_widget, a urwid.Text widget printing self.socket replies
         - a 50-col wide urwid.Padding container for self.map_widget, which is
           to print clipped map representations
+        - self.reply_widget, a urwid.Text widget printing self.socket replies
         """
         edit_widget = self.EditToSocketWidget(self.socket, 'SEND: ')
         self.reply_widget = urwid.Text('')
         self.map_widget = self.MapWidget('', wrap='clip')
         map_box = urwid.Padding(self.map_widget, width=50)
-        widget_pile = urwid.Pile([edit_widget, self.reply_widget, map_box])
+        widget_pile = urwid.Pile([edit_widget, map_box, self.reply_widget])
         return urwid.Filler(widget_pile, valign='top')
 
     class EditToSocketWidget(urwid.Edit):
@@ -73,7 +73,7 @@ class UrwidSetup:
     class MapWidget(urwid.Text):
         """Stores/updates/draws game map."""
         terrain_map = ' ' * 25
-        position = [0,0]
+        position = [0, 0]
 
         def draw_map(self):
             """Draw map view from .terrain_map, .position."""
@@ -125,20 +125,33 @@ class UrwidSetup:
             self.message_container, and just pipe the trigger to inform us
             about this.
 
-            If the message delivered is 'BYE', quits Urbit.
+            If the message delivered is 'BYE', quits Urwid.
             """
+
+            def mapdraw_command(prefix, func):
+                n = len(prefix)
+                if len(msg) > n and msg[:n] == prefix:
+                    m = getattr(self.widget2, func)
+                    m(msg[n:])
+                    return True
+                return False
+
             msg = self.message_container[0]
             if msg == 'BYE':
                 raise urwid.ExitMainLoop()
                 return
-            if len(msg) > 8 and msg[:8] == 'TERRAIN ':
-                self.widget2.update_terrain(msg[8:])
-            elif len(msg) > 11 and msg[:11] == 'POSITION_Y ':
-                self.widget2.update_position_y(msg[11:])
-            elif len(msg) > 11 and msg[:11] == 'POSITION_X ':
-                self.widget2.update_position_x(msg[11:])
+            found_command = False
+            try:
+                found_command = (
+                    mapdraw_command('TERRAIN\n', 'update_terrain') or
+                    mapdraw_command('POSITION_Y ', 'update_position_y') or
+                    mapdraw_command('POSITION_X ', 'update_position_x'))
+            except Exception as e:
+                self.widget1.set_text('TROUBLESOME ARGUMENT: ' + msg + '\n' +
+                                      str(e))
             else:
-                self.widget1.set_text('SERVER: ' + msg)
+                if not found_command:
+                    self.widget1.set_text('UNKNOWN COMMAND: ' + msg)
             del self.message_container[0]
 
     def recv_loop(self):

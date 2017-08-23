@@ -82,7 +82,7 @@ class IO_Handler(socketserver.BaseRequestHandler):
 class World:
     turn = 0
     map_ = 'xxxxx\nx...x\nx.X.x\nx...x\nxxxxx'
-    player_pos = (3,3)
+    player_pos = (3, 3)
 
 
 def fib(n):
@@ -148,10 +148,10 @@ class CommandHandler:
         sleep(1)
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('TERRAIN ' + self.world.map_)
+        self.send_all('TERRAIN\n' + self.world.map_)
         self.send_all('POSITION_Y ' + str(self.world.player_pos[0]))
         self.send_all('POSITION_X ' + str(self.world.player_pos[1]))
-        self.pool_result = self.pool.map_async(fib, (35,35))
+        self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):
         """Send world.turn to caller."""
