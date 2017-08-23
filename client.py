@@ -6,6 +6,10 @@ import socket
 import threading
 
 
+class ArgumentError(Exception):
+    pass
+
+
 class UrwidSetup:
 
     def __init__(self, socket):
@@ -73,7 +77,7 @@ class UrwidSetup:
     class MapWidget(urwid.Text):
         """Stores/updates/draws game map."""
         terrain_map = ' ' * 25
-        position = [0, 0]
+        position = (0, 0)
 
         def draw_map(self):
             """Draw map view from .terrain_map, .position."""
@@ -89,14 +93,21 @@ class UrwidSetup:
             self.terrain_map = terrain_map
             self.draw_map()
 
-        def update_position_y(self, position_y_string):
-            """Update self.position[0]."""
-            self.position[0] = int(position_y_string)
-            self.draw_map()
+        def update_position(self, position_string):
+            """Update self.position."""
 
-        def update_position_x(self, position_x_string):
-            """Update self.position[1]."""
-            self.position[1] = int(position_x_string)
+            def get_axis_position_from_argument(axis, token):
+                if len(token) < 3 or token[:2] != axis + ':' or \
+                        not token[2:].isdigit():
+                    raise ArgumentError('Bad arg for ' + axis + ' position.')
+                return int(token[2:])
+
+            tokens = position_string.split(',')
+            if len(tokens) != 2:
+                raise ArgumentError('wrong number of ","-separated arguments')
+            y = get_axis_position_from_argument('y', tokens[0])
+            x = get_axis_position_from_argument('x', tokens[1])
+            self.position = (y, x)
             self.draw_map()
 
     class InputHandler:
@@ -144,10 +155,9 @@ class UrwidSetup:
             try:
                 found_command = (
                     mapdraw_command('TERRAIN\n', 'update_terrain') or
-                    mapdraw_command('POSITION_Y ', 'update_position_y') or
-                    mapdraw_command('POSITION_X ', 'update_position_x'))
-            except Exception as e:
-                self.widget1.set_text('TROUBLESOME ARGUMENT: ' + msg + '\n' +
+                    mapdraw_command('POSITION ', 'update_position'))
+            except ArgumentError as e:
+                self.widget1.set_text('BAD ARGUMENT: ' + msg + '\n' +
                                       str(e))
             else:
                 if not found_command:

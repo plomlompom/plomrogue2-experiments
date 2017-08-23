@@ -149,8 +149,8 @@ class CommandHandler:
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION_Y ' + str(self.world.player_pos[0]))
-        self.send_all('POSITION_X ' + str(self.world.player_pos[1]))
+        self.send_all('POSITION y:' + str(self.world.player_pos[0]) +
+                      ',x:' + str(self.world.player_pos[1]))
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):
