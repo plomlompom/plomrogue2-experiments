@@ -81,6 +81,7 @@ class IO_Handler(socketserver.BaseRequestHandler):
 
 class World:
     turn = 0
+    map_size = (5, 5)
     map_ = 'xxxxx\nx...x\nx.X.x\nx...x\nxxxxx'
     player_pos = (3, 3)
 
@@ -142,15 +143,19 @@ class CommandHandler:
         until a further INC finishes the turn.
         """
         from time import sleep
+
+        def stringify_yx(tuple_):
+            return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
+
         if self.pool_result is not None:
             self.pool_result.wait()
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
+        self.send_all('MAP_SIZE ' + stringify_yx(self.world.map_size))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION y:' + str(self.world.player_pos[0]) +
-                      ',x:' + str(self.world.player_pos[1]))
+        self.send_all('POSITION ' + stringify_yx(self.world.player_pos))
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):

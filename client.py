@@ -76,25 +76,20 @@ class UrwidSetup:
 
     class MapWidget(urwid.Text):
         """Stores/updates/draws game map."""
+        map_size = (5, 5)
         terrain_map = ' ' * 25
         position = (0, 0)
 
         def draw_map(self):
-            """Draw map view from .terrain_map, .position."""
+            """Draw map view from .map_size, .terrain_map, .position."""
             whole_map = []
             for c in self.terrain_map:
                 whole_map += [c]
-            pos_i = self.position[0] * (5 + 1) + self.position[1]
+            pos_i = self.position[0] * (self.map_size[1] + 1) + self.position[1]
             whole_map[pos_i] = '@'
             self.set_text(''.join(whole_map))
 
-        def update_terrain(self, terrain_map):
-            """Update self.terrain_map."""
-            self.terrain_map = terrain_map
-            self.draw_map()
-
-        def update_position(self, position_string):
-            """Update self.position."""
+        def get_yx(self, yx_string):
 
             def get_axis_position_from_argument(axis, token):
                 if len(token) < 3 or token[:2] != axis + ':' or \
@@ -102,12 +97,49 @@ class UrwidSetup:
                     raise ArgumentError('Bad arg for ' + axis + ' position.')
                 return int(token[2:])
 
-            tokens = position_string.split(',')
+            tokens = yx_string.split(',')
             if len(tokens) != 2:
                 raise ArgumentError('wrong number of ","-separated arguments')
-            y = get_axis_position_from_argument('y', tokens[0])
-            x = get_axis_position_from_argument('x', tokens[1])
-            self.position = (y, x)
+            y = get_axis_position_from_argument('Y', tokens[0])
+            x = get_axis_position_from_argument('X', tokens[1])
+            return (y, x)
+
+        def update_map_size(self, size_string):
+            """Set map size, redo self.terrain_map in new size, '?'-filled."""
+            new_map_size = self.get_yx(size_string)
+            if 0 in new_map_size:
+                raise ArgumentError('size value for either axis must be >0')
+            self.map_size = new_map_size
+            self.terrain_map = ''
+            for y in range(self.map_size[0]):
+                self.terrain_map += '?' * self.map_size[1] + '\n'
+            self.draw_map()
+
+        def update_terrain(self, terrain_map):
+            """Update self.terrain_map. Ensure size matching self.map_size."""
+            lines = terrain_map.split('\n')
+            if len(lines) != self.map_size[0]:
+                raise ArgumentError('wrong map height')
+            for line in lines:
+                if len(line) != self.map_size[1]:
+                    raise ArgumentError('wrong map width')
+            self.terrain_map = terrain_map
+            self.draw_map()
+
+        def update_position(self, position_string):
+            """Update self.position, ensure it's within map bounds."""
+
+            def get_axis_position_from_argument(axis, token):
+                if len(token) < 3 or token[:2] != axis + ':' or \
+                        not token[2:].isdigit():
+                    raise ArgumentError('Bad arg for ' + axis + ' position.')
+                return int(token[2:])
+
+            new_position = self.get_yx(position_string)
+            if new_position[0] >= self.map_size[0] or \
+                    new_position[1] >= self.map_size[1]:
+                raise ArgumentError('Position outside of map size bounds.')
+            self.position = new_position
             self.draw_map()
 
     class InputHandler:
@@ -155,7 +187,8 @@ class UrwidSetup:
             try:
                 found_command = (
                     mapdraw_command('TERRAIN\n', 'update_terrain') or
-                    mapdraw_command('POSITION ', 'update_position'))
+                    mapdraw_command('POSITION ', 'update_position') or
+                    mapdraw_command('MAP_SIZE ', 'update_map_size'))
             except ArgumentError as e:
                 self.widget1.set_text('BAD ARGUMENT: ' + msg + '\n' +
                                       str(e))
