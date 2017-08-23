@@ -82,8 +82,12 @@ class IO_Handler(socketserver.BaseRequestHandler):
 class World:
     turn = 0
     map_size = (5, 5)
-    map_ = 'xxxxx\nx...x\nx.X.x\nx...x\nxxxxx'
-    player_pos = (3, 3)
+    map_ = 'xxxxx\n'+\
+           'x...x\n'+\
+           'x.X.x\n'+\
+           'x...x\n'+\
+           'xxxxx'
+    player_pos = [3, 3]
 
 
 def fib(n):
@@ -92,6 +96,10 @@ def fib(n):
         return 1
     else:
         return fib(n-1) + fib(n-2)
+
+
+class ArgumentError(Exception):
+    pass
 
 
 class CommandHandler:
@@ -112,23 +120,23 @@ class CommandHandler:
         for connection_id in self.queues_out:
             self.send_to(connection_id, msg)
 
+    def stringify_yx(self, tuple_):
+        """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
+        return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
+
     def cmd_fib(self, tokens, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
 
         Numbers are calculated in parallel as far as possible, using fib().
         A 'CALCULATING …' message is sent to caller before the result.
         """
-        fib_fail = 'MALFORMED FIB REQUEST'
         if len(tokens) < 2:
-            self.send_to(connection_id, fib_fail)
-            return
+            raise ArgumentError('FIB NEEDS AT LEAST ONE ARGUMENT')
         numbers = []
         for token in tokens[1:]:
-            if token != '0' and token.isdigit():
-                numbers += [int(token)]
-            else:
-                self.send_to(connection_id, fib_fail)
-                return
+            if token == '0' or not token.isdigit():
+                raise ArgumentError('FIB ARGUMENTS MUST BE INTEGERS > 0')
+            numbers += [int(token)]
         self.send_to(connection_id, 'CALCULATING …')
         results = self.pool.map(fib, numbers)
         reply = ' '.join([str(r) for r in results])
@@ -143,24 +151,30 @@ class CommandHandler:
         until a further INC finishes the turn.
         """
         from time import sleep
-
-        def stringify_yx(tuple_):
-            return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
-
         if self.pool_result is not None:
             self.pool_result.wait()
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('MAP_SIZE ' + stringify_yx(self.world.map_size))
+        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION ' + stringify_yx(self.world.player_pos))
+        self.send_all('POSITION ' + self.stringify_yx(self.world.player_pos))
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):
         """Send world.turn to caller."""
         self.send_to(connection_id, str(self.world.turn))
+
+    def cmd_move(self, direction):
+        """Move player 'UP' or 'DOWN' depending on direction string."""
+        if not direction in {'UP', 'DOWN'}:
+            raise ArgumentError('MOVE ARGUMENT MUST BE "UP" or "DOWN"')
+        if direction == 'UP':
+            self.world.player_pos[0] -= 1
+        else:
+            self.world.player_pos[0] += 1
+        self.send_all('POSITION ' + self.stringify_yx(self.world.player_pos))
 
     def cmd_echo(self, tokens, input_, connection_id):
         """Send message in input_ beyond tokens[0] to caller."""
@@ -175,21 +189,26 @@ class CommandHandler:
     def handle_input(self, input_, connection_id):
         """Process input_ to command grammar, call command handler if found."""
         tokens = [token for token in input_.split(' ') if len(token) > 0]
-        if len(tokens) == 0:
-            self.send_to(connection_id, 'EMPTY COMMAND')
-        elif len(tokens) == 1 and tokens[0] == 'INC':
-            self.cmd_inc(connection_id)
-        elif len(tokens) == 1 and tokens[0] == 'GET_TURN':
-            self.cmd_get_turn(connection_id)
-        elif len(tokens) >= 1 and tokens[0] == 'ECHO':
-            self.cmd_echo(tokens, input_, connection_id)
-        elif len(tokens) >= 1 and tokens[0] == 'ALL':
-            self.cmd_all(tokens, input_)
-        elif len(tokens) >= 1 and tokens[0] == 'FIB':
-            # TODO: Should this really block the whole loop?
-            self.cmd_fib(tokens, connection_id)
-        else:
-            self.send_to(connection_id, 'UNKNOWN COMMAND')
+        try:
+            if len(tokens) == 0:
+                self.send_to(connection_id, 'EMPTY COMMAND')
+            elif len(tokens) == 1 and tokens[0] == 'INC':
+                self.cmd_inc(connection_id)
+            elif len(tokens) == 1 and tokens[0] == 'GET_TURN':
+                self.cmd_get_turn(connection_id)
+            elif len(tokens) == 2 and tokens[0] == 'MOVE':
+                self.cmd_move(tokens[1])
+            elif len(tokens) >= 1 and tokens[0] == 'ECHO':
+                self.cmd_echo(tokens, input_, connection_id)
+            elif len(tokens) >= 1 and tokens[0] == 'ALL':
+                self.cmd_all(tokens, input_)
+            elif len(tokens) >= 1 and tokens[0] == 'FIB':
+                # TODO: Should this really block the whole loop?
+                self.cmd_fib(tokens, connection_id)
+            else:
+                self.send_to(connection_id, 'UNKNOWN COMMAND')
+        except ArgumentError as e:
+            self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
 
 
 def io_loop(q):

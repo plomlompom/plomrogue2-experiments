@@ -190,11 +190,11 @@ class UrwidSetup:
                     mapdraw_command('POSITION ', 'update_position') or
                     mapdraw_command('MAP_SIZE ', 'update_map_size'))
             except ArgumentError as e:
-                self.widget1.set_text('BAD ARGUMENT: ' + msg + '\n' +
+                self.widget1.set_text('ARGUMENT ERROR: ' + msg + '\n' +
                                       str(e))
             else:
                 if not found_command:
-                    self.widget1.set_text('UNKNOWN COMMAND: ' + msg)
+                    self.widget1.set_text('UNHANDLED INPUT: ' + msg)
             del self.message_container[0]
 
     def recv_loop(self):
