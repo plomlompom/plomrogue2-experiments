@@ -54,7 +54,7 @@ class UrwidSetup:
         - self.reply_widget, a urwid.Text widget printing self.socket replies
         """
         edit_widget = self.EditToSocketWidget(self.socket, 'SEND: ')
-        self.reply_widget = urwid.Text('')
+        self.reply_widget = self.LogWidget('')
         self.map_widget = self.MapWidget('', wrap='clip')
         map_box = urwid.Padding(self.map_widget, width=50)
         widget_pile = urwid.Pile([edit_widget, map_box, self.reply_widget])
@@ -73,6 +73,13 @@ class UrwidSetup:
                 return super().keypress(size, key)
             plom_socket_io.send(self.socket, self.edit_text)
             self.edit_text = ''
+
+    class LogWidget(urwid.Text):
+        """Display client log, newest message on top."""
+
+        def add(self, text):
+            """Add text to (top of) log."""
+            self.set_text(text + '\n' + self.text)
 
     class MapWidget(urwid.Text):
         """Stores/updates/draws game map."""
@@ -152,9 +159,9 @@ class UrwidSetup:
         urwid-external thread.
         """
 
-        def __init__(self, widget1, widget2, message_container):
-            self.widget1 = widget1
-            self.widget2 = widget2
+        def __init__(self, log_widget, map_widget, message_container):
+            self.log_widget = log_widget
+            self.map_widget = map_widget
             self.message_container = message_container
 
         def handle_input(self, trigger):
@@ -174,7 +181,7 @@ class UrwidSetup:
             def mapdraw_command(prefix, func):
                 n = len(prefix)
                 if len(msg) > n and msg[:n] == prefix:
-                    m = getattr(self.widget2, func)
+                    m = getattr(self.map_widget, func)
                     m(msg[n:])
                     return True
                 return False
@@ -190,11 +197,10 @@ class UrwidSetup:
                     mapdraw_command('POSITION ', 'update_position') or
                     mapdraw_command('MAP_SIZE ', 'update_map_size'))
             except ArgumentError as e:
-                self.widget1.set_text('ARGUMENT ERROR: ' + msg + '\n' +
-                                      str(e))
+                self.log_widget.add('ARGUMENT ERROR: ' + msg + '\n' + str(e))
             else:
                 if not found_command:
-                    self.widget1.set_text('UNHANDLED INPUT: ' + msg)
+                    self.log_widget.add('UNHANDLED INPUT: ' + msg)
             del self.message_container[0]
 
     def recv_loop(self):
