@@ -103,9 +103,18 @@ class Thing:
             self.position[0] -= 1
         elif direction == 'DOWN':
             self.position[0] += 1
+        elif direction == 'RIGHT':
+            self.position[1] += 1
+        elif direction == 'LEFT':
+            self.position[1] -= 1
 
     def decide_task(self):
-        self.set_task('wait')
+        if self.position[1] > 1:
+            self.set_task('move', 'LEFT')
+        elif self.position[1] < 3:
+            self.set_task('move', 'RIGHT')
+        else:
+            self.set_task('wait')
 
     def set_task(self, task, *args, **kwargs):
         self.task = Task(task, args, kwargs)
@@ -258,8 +267,9 @@ class CommandHandler:
 
     def cmd_move(self, direction, connection_id):
         """Set player task to 'move' with direction arg, finish player turn."""
-        if not direction in {'UP', 'DOWN'}:
-            raise ArgumentError('MOVE ARGUMENT MUST BE "UP" or "DOWN"')
+        if not direction in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
+            raise ArgumentError('MOVE ARGUMENT MUST BE ONE OF: '
+                                'UP, DOWN, RIGHT, LEFT')
         self.world.player.set_task('move', direction=direction)
         self.proceed_to_next_player_turn(connection_id)
 
