@@ -86,14 +86,21 @@ class UrwidSetup:
         map_size = (5, 5)
         terrain_map = ' ' * 25
         position = (0, 0)
+        things = []
+
+        class Thing:
+            def __init__(self, position, symbol):
+                self.position = position
+                self.symbol = symbol
 
         def draw_map(self):
             """Draw map view from .map_size, .terrain_map, .position."""
             whole_map = []
             for c in self.terrain_map:
                 whole_map += [c]
-            pos_i = self.position[0] * (self.map_size[1] + 1) + self.position[1]
-            whole_map[pos_i] = '@'
+            for t in self.things:
+                pos_i = t.position[0] * (self.map_size[1] + 1) + t.position[1]
+                whole_map[pos_i] = t.symbol
             self.set_text(''.join(whole_map))
 
         def get_yx(self, yx_string):
@@ -133,21 +140,29 @@ class UrwidSetup:
             self.terrain_map = terrain_map
             self.draw_map()
 
-        def update_position(self, position_string):
-            """Update self.position, ensure it's within map bounds."""
-
-            def get_axis_position_from_argument(axis, token):
-                if len(token) < 3 or token[:2] != axis + ':' or \
-                        not token[2:].isdigit():
-                    raise ArgumentError('Bad arg for ' + axis + ' position.')
-                return int(token[2:])
-
-            new_position = self.get_yx(position_string)
-            if new_position[0] >= self.map_size[0] or \
-                    new_position[1] >= self.map_size[1]:
+        def update_things(self, thing_description):
+            """Append thing of thing_description to self.things."""
+            thing_types = {'human': '@', 'monster': 'M'}
+            tokens = thing_description.split()
+            if len(tokens) != 2:
+                raise ArgumentError('Wrong number of tokens.')
+            yx = self.get_yx(tokens[1])
+            if yx[0] >= self.map_size[0] or yx[1] >= self.map_size[1]:
                 raise ArgumentError('Position outside of map size bounds.')
-            self.position = new_position
+            type_token = tokens[0]
+            prefix = 'TYPE:'
+            type_ = '?'
+            if len(type_token) <= len(prefix) or \
+                    type_token[:len(prefix)] != prefix:
+                raise ArgumentError('Invalid type token.')
+            type_ = type_token[len(prefix):]
+            if type_ not in thing_types:
+                raise ArgumentError('Unknown thing type.')
+            self.things += [self.Thing(yx, thing_types[type_])]
             self.draw_map()
+
+        def clear_things(self, _):
+            self.things = []
 
     class InputHandler:
         """Delivers data from other thread to widget via message_container.
@@ -193,8 +208,9 @@ class UrwidSetup:
             found_command = False
             try:
                 found_command = (
+                    mapdraw_command('NEW_TURN ', 'clear_things') or
                     mapdraw_command('TERRAIN\n', 'update_terrain') or
-                    mapdraw_command('POSITION ', 'update_position') or
+                    mapdraw_command('THING ', 'update_things') or
                     mapdraw_command('MAP_SIZE ', 'update_map_size'))
             except ArgumentError as e:
                 self.log_widget.add('ARGUMENT ERROR: ' + msg + '\n' + str(e))

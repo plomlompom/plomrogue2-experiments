@@ -90,7 +90,8 @@ class Task:
 
 class Thing:
 
-    def __init__(self, position):
+    def __init__(self, type_, position):
+        self.type = type_
         self.position = position
         self.task = Task('wait')
 
@@ -135,7 +136,7 @@ class World:
                     'x.X.x\n'+\
                     'x...x\n'+\
                     'xxxxx'
-        self.things = [Thing(position=[3, 3]), Thing([1, 1])]
+        self.things = [Thing('human', [3, 3]), Thing('monster', [1, 1])]
         self.player_i = 0
         self.player = self.things[self.player_i]
 
@@ -201,7 +202,9 @@ class CommandHandler:
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION ' + self.stringify_yx(self.world.player.position))
+        for thing in self.world.things:
+            self.send_all('THING TYPE:' + thing.type + ' '
+                          + self.stringify_yx(thing.position))
 
     def cmd_fib(self, tokens, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
@@ -244,7 +247,9 @@ class CommandHandler:
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION ' + self.stringify_yx(self.world.player.position))
+        for thing in self.world.things:
+            self.send_all('THING TYPE:' + thing.type + ' '
+                          + self.stringify_yx(thing.position))
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):
