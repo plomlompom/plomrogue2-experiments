@@ -79,40 +79,47 @@ class IO_Handler(socketserver.BaseRequestHandler):
         self.request.close()
 
 
+class Task:
+
+    def __init__(self, name, args=(), kwargs={}):
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
+        self.todo = 1
+
+
 class Thing:
 
     def __init__(self, position):
         self.position = position
-        self.task = 'wait'
-        self.todo = 0
+        self.task = Task('wait')
 
     def task_wait(self):
         pass
 
-    def task_moveup(self):
-        self.position[0] -= 1
-
-    def task_movedown(self):
-        self.position[0] += 1
+    def task_move(self, direction):
+        if direction == 'UP':
+            self.position[0] -= 1
+        elif direction == 'DOWN':
+            self.position[0] += 1
 
     def decide_task(self):
         self.set_task('wait')
 
-    def set_task(self, task):
-        self.task = task
-        self.todo = 1
+    def set_task(self, task, *args, **kwargs):
+        self.task = Task(task, args, kwargs)
 
     def proceed(self, is_AI=True):
         """Further the thing in its tasks.
 
-        Decrements self.todo; if it thus falls to <= 0, enacts the method whose
-        name is 'task_' + self.task and sets self.task = None. If is_AI, calls
-        self.decide_task to decide a new self.task.
+        Decrements .task.todo; if it thus falls to <= 0, enacts method whose
+        name is 'task_' + self.task.name and sets .task = None. If is_AI, calls
+        .decide_task to decide a self.task.
         """
-        self.todo -= 1
-        if self.todo <= 0:
-            task= getattr(self, 'task_' + self.task)
-            task()
+        self.task.todo -= 1
+        if self.task.todo <= 0:
+            task= getattr(self, 'task_' + self.task.name)
+            task(*self.task.args, **self.task.kwargs)
             self.task = None
         if is_AI and self.task is None:
             self.decide_task()
@@ -245,13 +252,10 @@ class CommandHandler:
         self.send_to(connection_id, str(self.world.turn))
 
     def cmd_move(self, direction, connection_id):
-        """Set player task to 'moveup' or 'movedown', finish player turn."""
+        """Set player task to 'move' with direction arg, finish player turn."""
         if not direction in {'UP', 'DOWN'}:
             raise ArgumentError('MOVE ARGUMENT MUST BE "UP" or "DOWN"')
-        if direction == 'UP':
-            self.world.player.set_task('moveup')
-        else:
-            self.world.player.set_task('movedown')
+        self.world.player.set_task('move', direction=direction)
         self.proceed_to_next_player_turn(connection_id)
 
     def cmd_wait(self, connection_id):
