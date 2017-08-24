@@ -79,15 +79,58 @@ class IO_Handler(socketserver.BaseRequestHandler):
         self.request.close()
 
 
+class Thing:
+
+    def __init__(self, position):
+        self.position = position
+        self.task = 'wait'
+        self.todo = 0
+
+    def task_wait(self):
+        pass
+
+    def task_moveup(self):
+        self.position[0] -= 1
+
+    def task_movedown(self):
+        self.position[0] += 1
+
+    def decide_task(self):
+        self.set_task('wait')
+
+    def set_task(self, task):
+        self.task = task
+        self.todo = 1
+
+    def proceed(self, is_AI=True):
+        """Further the thing in its tasks.
+
+        Decrements self.todo; if it thus falls to <= 0, enacts the method whose
+        name is 'task_' + self.task and sets self.task = None. If is_AI, calls
+        self.decide_task to decide a new self.task.
+        """
+        self.todo -= 1
+        if self.todo <= 0:
+            task= getattr(self, 'task_' + self.task)
+            task()
+            self.task = None
+        if is_AI and self.task is None:
+            self.decide_task()
+
+
 class World:
-    turn = 0
-    map_size = (5, 5)
-    map_ = 'xxxxx\n'+\
-           'x...x\n'+\
-           'x.X.x\n'+\
-           'x...x\n'+\
-           'xxxxx'
-    player_pos = [3, 3]
+
+    def __init__(self):
+        self.turn = 0
+        self.map_size = (5, 5)
+        self.map_ = 'xxxxx\n'+\
+                    'x...x\n'+\
+                    'x.X.x\n'+\
+                    'x...x\n'+\
+                    'xxxxx'
+        self.things = [Thing(position=[3, 3]), Thing([1, 1])]
+        self.player_i = 0
+        self.player = self.things[self.player_i]
 
 
 def fib(n):
@@ -107,8 +150,10 @@ class CommandHandler:
     def __init__(self, queues_out):
         from multiprocessing import Pool
         self.queues_out = queues_out
-        self.pool = Pool()
         self.world = World()
+        # self.pool and self.pool_result are currently only needed by the FIB
+        # command and the demo of a parallelized game loop in cmd_inc_p.
+        self.pool = Pool()
         self.pool_result = None
 
     def send_to(self, connection_id, msg):
@@ -123,6 +168,33 @@ class CommandHandler:
     def stringify_yx(self, tuple_):
         """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
         return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
+
+    def proceed_to_next_player_turn(self, connection_id):
+        """Run game world turns until player can decide their next step.
+
+        Sends a 'TURN_FINISHED' message, then iterates through all non-player
+        things, on each step furthering them in their tasks (and letting them
+        decide new ones if they finish). The iteration order is: first all
+        things that come after the player in the world things list, then (after
+        incrementing the world turn) all that come before the player; then the
+        player's .proceed() is run, and if it does not finish his task, the
+        loop starts at the beginning. Once the player's task is finished, the
+        loop breaks, and client-relevant game data is sent.
+        """
+        self.send_all('TURN_FINISHED ' + str(self.world.turn))
+        while True:
+            for thing in self.world.things[self.world.player_i+1:]:
+                thing.proceed()
+            self.world.turn += 1
+            for thing  in self.world.things[:self.world.player_i]:
+                thing.proceed()
+            self.world.player.proceed(is_AI=False)
+            if self.world.player.task is None:
+                break
+        self.send_all('NEW_TURN ' + str(self.world.turn))
+        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
+        self.send_all('TERRAIN\n' + self.world.map_)
+        self.send_all('POSITION ' + self.stringify_yx(self.world.player.position))
 
     def cmd_fib(self, tokens, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
@@ -142,13 +214,19 @@ class CommandHandler:
         reply = ' '.join([str(r) for r in results])
         self.send_to(connection_id, reply)
 
-    def cmd_inc(self, connection_id):
+    def cmd_inc_p(self, connection_id):
         """Increment world.turn, send game turn data to everyone.
 
         To simulate game processing waiting times, a one second delay between
         TURN_FINISHED and NEW_TURN occurs; after NEW_TURN, some expensive
         calculations are started as pool processes that need to be finished
         until a further INC finishes the turn.
+
+        This is just a demo structure for how the game loop could work when
+        parallelized. One might imagine a two-step game turn, with a non-action
+        step determining actor tasks (the AI determinations would take the
+        place of the fib calculations here), and an action step wherein these
+        tasks are performed (where now sleep(1) is).
         """
         from time import sleep
         if self.pool_result is not None:
@@ -159,22 +237,27 @@ class CommandHandler:
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
         self.send_all('TERRAIN\n' + self.world.map_)
-        self.send_all('POSITION ' + self.stringify_yx(self.world.player_pos))
+        self.send_all('POSITION ' + self.stringify_yx(self.world.player.position))
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_get_turn(self, connection_id):
         """Send world.turn to caller."""
         self.send_to(connection_id, str(self.world.turn))
 
-    def cmd_move(self, direction):
-        """Move player 'UP' or 'DOWN' depending on direction string."""
+    def cmd_move(self, direction, connection_id):
+        """Set player task to 'moveup' or 'movedown', finish player turn."""
         if not direction in {'UP', 'DOWN'}:
             raise ArgumentError('MOVE ARGUMENT MUST BE "UP" or "DOWN"')
         if direction == 'UP':
-            self.world.player_pos[0] -= 1
+            self.world.player.set_task('moveup')
         else:
-            self.world.player_pos[0] += 1
-        self.send_all('POSITION ' + self.stringify_yx(self.world.player_pos))
+            self.world.player.set_task('movedown')
+        self.proceed_to_next_player_turn(connection_id)
+
+    def cmd_wait(self, connection_id):
+        """Set player task to 'wait', finish player turn."""
+        self.world.player.set_task('wait')
+        self.proceed_to_next_player_turn(connection_id)
 
     def cmd_echo(self, tokens, input_, connection_id):
         """Send message in input_ beyond tokens[0] to caller."""
@@ -192,12 +275,14 @@ class CommandHandler:
         try:
             if len(tokens) == 0:
                 self.send_to(connection_id, 'EMPTY COMMAND')
-            elif len(tokens) == 1 and tokens[0] == 'INC':
-                self.cmd_inc(connection_id)
+            elif len(tokens) == 1 and tokens[0] == 'INC_P':
+                self.cmd_inc_p(connection_id)
             elif len(tokens) == 1 and tokens[0] == 'GET_TURN':
                 self.cmd_get_turn(connection_id)
+            elif len(tokens) == 1 and tokens[0] == 'WAIT':
+                self.cmd_wait(connection_id)
             elif len(tokens) == 2 and tokens[0] == 'MOVE':
-                self.cmd_move(tokens[1])
+                self.cmd_move(tokens[1], connection_id)
             elif len(tokens) >= 1 and tokens[0] == 'ECHO':
                 self.cmd_echo(tokens, input_, connection_id)
             elif len(tokens) >= 1 and tokens[0] == 'ALL':
