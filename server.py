@@ -128,7 +128,7 @@ class Thing:
         """
         self.task.todo -= 1
         if self.task.todo <= 0:
-            task= getattr(self, 'task_' + self.task.name)
+            task = getattr(self, 'task_' + self.task.name)
             task(*self.task.args, **self.task.kwargs)
             self.task = None
         if is_AI and self.task is None:
@@ -140,10 +140,10 @@ class World:
     def __init__(self):
         self.turn = 0
         self.map_size = (5, 5)
-        self.map_ = 'xxxxx\n'+\
-                    'x...x\n'+\
-                    'x.X.x\n'+\
-                    'x...x\n'+\
+        self.map_ = 'xxxxx\n' +\
+                    'x...x\n' +\
+                    'x.X.x\n' +\
+                    'x...x\n' +\
                     'xxxxx'
         self.things = [Thing('human', [3, 3]), Thing('monster', [1, 1])]
         self.player_i = 0
@@ -186,6 +186,17 @@ class CommandHandler:
         """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
         return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
+    def quoted(self, string):
+        """Quote and escape string so client interprets it as single token."""
+        quoted = []
+        quoted += ['"']
+        for c in string:
+            if c in {'"', '\\'}:
+                quoted += ['\\']
+            quoted += [c]
+        quoted += ['"']
+        return ''.join(quoted)
+
     def proceed_to_next_player_turn(self, connection_id):
         """Run game world turns until player can decide their next step.
 
@@ -203,14 +214,14 @@ class CommandHandler:
             for thing in self.world.things[self.world.player_i+1:]:
                 thing.proceed()
             self.world.turn += 1
-            for thing  in self.world.things[:self.world.player_i]:
+            for thing in self.world.things[:self.world.player_i]:
                 thing.proceed()
             self.world.player.proceed(is_AI=False)
             if self.world.player.task is None:
                 break
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.world.map_)
+        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
         for thing in self.world.things:
             self.send_all('THING TYPE:' + thing.type + ' '
                           + self.stringify_yx(thing.position))
@@ -255,7 +266,7 @@ class CommandHandler:
         self.world.turn += 1
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.world.map_)
+        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
         for thing in self.world.things:
             self.send_all('THING TYPE:' + thing.type + ' '
                           + self.stringify_yx(thing.position))
@@ -267,7 +278,7 @@ class CommandHandler:
 
     def cmd_move(self, direction, connection_id):
         """Set player task to 'move' with direction arg, finish player turn."""
-        if not direction in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
+        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
             raise ArgumentError('MOVE ARGUMENT MUST BE ONE OF: '
                                 'UP, DOWN, RIGHT, LEFT')
         self.world.player.set_task('move', direction=direction)
