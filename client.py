@@ -39,6 +39,7 @@ class UrwidSetup:
         self.server_output = []
         input_handler = getattr(self.InputHandler(self.reply_widget,
                                                   self.map_widget,
+                                                  self.turn_widget,
                                                   self.server_output),
                                 'handle_input')
         self.urwid_pipe_write_fd = self.main_loop.watch_pipe(input_handler)
@@ -54,10 +55,12 @@ class UrwidSetup:
         - self.reply_widget, a urwid.Text widget printing self.socket replies
         """
         edit_widget = self.EditToSocketWidget(self.socket, 'SEND: ')
-        self.reply_widget = self.LogWidget('')
         self.map_widget = self.MapWidget('', wrap='clip')
+        self.turn_widget = self.TurnWidget('')
+        self.reply_widget = self.LogWidget('')
         map_box = urwid.Padding(self.map_widget, width=50)
-        widget_pile = urwid.Pile([edit_widget, map_box, self.reply_widget])
+        widget_pile = urwid.Pile([edit_widget, map_box, self.turn_widget,
+                                  self.reply_widget])
         return urwid.Filler(widget_pile, valign='top')
 
     class EditToSocketWidget(urwid.Edit):
@@ -74,11 +77,20 @@ class UrwidSetup:
             plom_socket_io.send(self.socket, self.edit_text)
             self.edit_text = ''
 
+    class TurnWidget(urwid.Text):
+        """Displays turn number."""
+
+        def set_turn(self, turn_string):
+            turn_string = turn_string.strip()
+            if not turn_string.isdigit():
+                raise ArgumentError('Argument must be non-negative integer.')
+            self.set_text('TURN: ' + turn_string)
+
     class LogWidget(urwid.Text):
-        """Display client log, newest message on top."""
+        """Displays client log, newest message on top."""
 
         def add(self, text):
-            """Add text to (top of) log."""
+            """Add text plus newline to (top of) log."""
             self.set_text(text + '\n' + self.text)
 
     class MapWidget(urwid.Text):
@@ -174,9 +186,11 @@ class UrwidSetup:
         urwid-external thread.
         """
 
-        def __init__(self, log_widget, map_widget, message_container):
+        def __init__(self, log_widget, map_widget, turn_widget,
+                     message_container):
             self.log_widget = log_widget
             self.map_widget = map_widget
+            self.turn_widget = turn_widget
             self.message_container = message_container
 
         def handle_input(self, trigger):
@@ -201,13 +215,21 @@ class UrwidSetup:
                     return True
                 return False
 
+            def turndraw_command(prefix, func):
+                n = len(prefix)
+                if len(msg) > n and msg[:n] == prefix:
+                    m = getattr(self.turn_widget, func)
+                    m(msg[n:])
+                    return True
+                return False
+
             msg = self.message_container[0]
             if msg == 'BYE':
                 raise urwid.ExitMainLoop()
                 return
             found_command = False
             try:
-                found_command = (
+                found_command = turndraw_command('NEW_TURN ', 'set_turn') or (
                     mapdraw_command('NEW_TURN ', 'clear_things') or
                     mapdraw_command('TERRAIN\n', 'update_terrain') or
                     mapdraw_command('THING ', 'update_things') or
