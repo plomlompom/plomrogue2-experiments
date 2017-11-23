@@ -196,6 +196,15 @@ class CommandHandler:
         quoted += ['"']
         return ''.join(quoted)
 
+    def send_all_gamestate(self):
+        """Send out game state data relevant to clients."""
+        self.send_all('NEW_TURN ' + str(self.world.turn))
+        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
+        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
+        for thing in self.world.things:
+            self.send_all('THING TYPE:' + thing.type + ' '
+                          + self.stringify_yx(thing.position))
+
     def proceed_to_next_player_turn(self, connection_id):
         """Run game world turns until player can decide their next step.
 
@@ -218,12 +227,7 @@ class CommandHandler:
             self.world.player.proceed(is_AI=False)
             if self.world.player.task is None:
                 break
-        self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
-        for thing in self.world.things:
-            self.send_all('THING TYPE:' + thing.type + ' '
-                          + self.stringify_yx(thing.position))
+        self.send_all_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
@@ -257,12 +261,7 @@ class CommandHandler:
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
-        self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
-        for thing in self.world.things:
-            self.send_all('THING TYPE:' + thing.type + ' '
-                          + self.stringify_yx(thing.position))
+        self.send_all_gamestate()
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
     def cmd_GET_TURN(self, connection_id):
