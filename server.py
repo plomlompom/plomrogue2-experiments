@@ -172,6 +172,17 @@ class CommandHandler:
         self.pool = Pool()
         self.pool_result = None
 
+    def handle_input(self, input_, connection_id):
+        """Process input_ to command grammar, call command handler if found."""
+        try:
+            command = self.parser.parse(input_)
+            if command is None:
+                self.send_to(connection_id, 'UNHANDLED INPUT')
+            else:
+                command(connection_id=connection_id)
+        except ArgError as e:
+            self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
+
     def send_to(self, connection_id, msg):
         """Send msg to client of connection_id."""
         self.queues_out[connection_id].put(msg)
@@ -229,6 +240,34 @@ class CommandHandler:
                 break
         self.send_all_gamestate()
 
+    def cmd_MOVE(self, direction, connection_id):
+        """Set player task to 'move' with direction arg, finish player turn."""
+        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
+            raise ArgError('Move argument must be one of: '
+                           'UP, DOWN, RIGHT, LEFT')
+        self.world.player.set_task('move', direction=direction)
+        self.proceed_to_next_player_turn(connection_id)
+    cmd_MOVE.argtypes = 'string'
+
+    def cmd_WAIT(self, connection_id):
+        """Set player task to 'wait', finish player turn."""
+        self.world.player.set_task('wait')
+        self.proceed_to_next_player_turn(connection_id)
+
+    def cmd_GET_TURN(self, connection_id):
+        """Send world.turn to caller."""
+        self.send_to(connection_id, str(self.world.turn))
+
+    def cmd_ECHO(self, msg, connection_id):
+        """Send msg to caller."""
+        self.send_to(connection_id, msg)
+    cmd_ECHO.argtypes = 'string'
+
+    def cmd_ALL(self, msg, connection_id):
+        """Send msg to all clients."""
+        self.send_all(msg)
+    cmd_ALL.argtypes = 'string'
+
     def cmd_FIB(self, numbers, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
 
@@ -263,45 +302,6 @@ class CommandHandler:
         self.world.turn += 1
         self.send_all_gamestate()
         self.pool_result = self.pool.map_async(fib, (35, 35))
-
-    def cmd_GET_TURN(self, connection_id):
-        """Send world.turn to caller."""
-        self.send_to(connection_id, str(self.world.turn))
-
-    def cmd_MOVE(self, direction, connection_id):
-        """Set player task to 'move' with direction arg, finish player turn."""
-        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
-            raise ArgError('Move argument must be one of: '
-                           'UP, DOWN, RIGHT, LEFT')
-        self.world.player.set_task('move', direction=direction)
-        self.proceed_to_next_player_turn(connection_id)
-    cmd_MOVE.argtypes = 'string'
-
-    def cmd_WAIT(self, connection_id):
-        """Set player task to 'wait', finish player turn."""
-        self.world.player.set_task('wait')
-        self.proceed_to_next_player_turn(connection_id)
-
-    def cmd_ECHO(self, msg, connection_id):
-        """Send msg to caller."""
-        self.send_to(connection_id, msg)
-    cmd_ECHO.argtypes = 'string'
-
-    def cmd_ALL(self, msg, connection_id):
-        """Send msg to all clients."""
-        self.send_all(msg)
-    cmd_ALL.argtypes = 'string'
-
-    def handle_input(self, input_, connection_id):
-        """Process input_ to command grammar, call command handler if found."""
-        try:
-            command = self.parser.parse(input_)
-            if command is None:
-                self.send_to(connection_id, 'UNHANDLED INPUT')
-            else:
-                command(connection_id=connection_id)
-        except ArgError as e:
-            self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
 
 
 def io_loop(q):
