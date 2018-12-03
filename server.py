@@ -102,18 +102,21 @@ class Thing:
         self.position = position
         self.task = Task('wait')
 
+    def _move_pos(self, direction, pos_yx):
+        if direction == 'UP':
+            pos_yx[0] -= 1
+        elif direction == 'DOWN':
+            pos_yx[0] += 1
+        elif direction == 'RIGHT':
+            pos_yx[1] += 1
+        elif direction == 'LEFT':
+            pos_yx[1] -= 1
+
     def task_wait(self):
         pass
 
     def task_move(self, direction):
-        if direction == 'UP':
-            self.position[0] -= 1
-        elif direction == 'DOWN':
-            self.position[0] += 1
-        elif direction == 'RIGHT':
-            self.position[1] += 1
-        elif direction == 'LEFT':
-            self.position[1] -= 1
+        self._move_pos(direction, self.position)
 
     def decide_task(self):
         if self.position[1] > 1:
@@ -130,14 +133,7 @@ class Thing:
             else:
                 direction = kwargs['direction']
             test_pos = self.position[:]
-            if direction == 'UP':
-                test_pos[0] -= 1
-            elif direction == 'DOWN':
-                test_pos[0] += 1
-            elif direction == 'RIGHT':
-                test_pos[1] += 1
-            elif direction == 'LEFT':
-                test_pos[1] -= 1
+            self._move_pos(direction, test_pos)
             if test_pos[0] < 0 or test_pos[1] < 0 or \
                test_pos[0] >= self.world.map_size[0] or \
                test_pos[1] >= self.world.map_size[1]:
