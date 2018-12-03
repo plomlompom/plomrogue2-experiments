@@ -19,13 +19,4 @@ dialogue:
 * `./client.py`
 * `./server.py`
 
-The following commands can be sent from client to server:
-
-* `QUIT` – closes the connection
-* `FIB` followed by positive integers (all tokens separated by ` `); for each
-  such integer n, calculates th nn-th Fibonacci number (this allows for testing
-  parallel CPU-heavy computation)
-
-Additionally, the server regularly sends a counter state to the client.
-
 See `./requirements.txt` for the dependencies.
