@@ -85,13 +85,42 @@ class IO_Handler(socketserver.BaseRequestHandler):
         self.request.close()
 
 
+def move_pos(direction, pos_yx):
+    if direction == 'UP':
+        pos_yx[0] -= 1
+    elif direction == 'DOWN':
+        pos_yx[0] += 1
+    elif direction == 'RIGHT':
+        pos_yx[1] += 1
+    elif direction == 'LEFT':
+        pos_yx[1] -= 1
+
+
 class Task:
 
-    def __init__(self, name, args=(), kwargs={}):
+    def __init__(self, thing, name, args=(), kwargs={}):
         self.name = name
+        self.thing = thing
         self.args = args
         self.kwargs = kwargs
         self.todo = 1
+
+    def check(self):
+        if self.name == 'move':
+            if len(self.args) > 0:
+                direction = self.args[0]
+            else:
+                direction = self.kwargs['direction']
+            test_pos = self.thing.position[:]
+            move_pos(direction, test_pos)
+            if test_pos[0] < 0 or test_pos[1] < 0 or \
+               test_pos[0] >= self.thing.world.map_size[0] or \
+               test_pos[1] >= self.thing.world.map_size[1]:
+                raise GameError('would move outside map bounds')
+            pos_i = test_pos[0] * self.thing.world.map_size[1] + test_pos[1]
+            map_tile = self.thing.world.map_[pos_i]
+            if map_tile != '.':
+                raise GameError('would move into illegal terrain')
 
 
 class Thing:
@@ -100,23 +129,13 @@ class Thing:
         self.world = world
         self.type_ = type_
         self.position = position
-        self.task = Task('wait')
-
-    def _move_pos(self, direction, pos_yx):
-        if direction == 'UP':
-            pos_yx[0] -= 1
-        elif direction == 'DOWN':
-            pos_yx[0] += 1
-        elif direction == 'RIGHT':
-            pos_yx[1] += 1
-        elif direction == 'LEFT':
-            pos_yx[1] -= 1
+        self.task = Task(self, 'wait')
 
     def task_wait(self):
         pass
 
     def task_move(self, direction):
-        self._move_pos(direction, self.position)
+        move_pos(direction, self.position)
 
     def decide_task(self):
         if self.position[1] > 1:
@@ -126,26 +145,9 @@ class Thing:
         else:
             self.set_task('wait')
 
-    def check_task(self, task, *args, **kwargs):
-        if task == 'move':
-            if len(args) > 0:
-                direction = args[0]
-            else:
-                direction = kwargs['direction']
-            test_pos = self.position[:]
-            self._move_pos(direction, test_pos)
-            if test_pos[0] < 0 or test_pos[1] < 0 or \
-               test_pos[0] >= self.world.map_size[0] or \
-               test_pos[1] >= self.world.map_size[1]:
-                raise GameError('would move outside map bounds')
-            pos_i = test_pos[0] * self.world.map_size[1] + test_pos[1]
-            map_tile = self.world.map_[pos_i]
-            if map_tile != '.':
-                raise GameError('would move into illegal terrain')
-
     def set_task(self, task, *args, **kwargs):
-        self.check_task(task, *args, **kwargs)
-        self.task = Task(task, args, kwargs)
+        self.task = Task(self, task, args, kwargs)
+        self.task.check()
 
     def proceed(self, is_AI=True):
         """Further the thing in its tasks.
