@@ -10,6 +10,10 @@ from parser import ArgError, Parser
 socketserver.TCPServer.allow_reuse_address = True
 
 
+class GameError(Exception):
+    pass
+
+
 class Server(socketserver.ThreadingTCPServer):
     """Bind together threaded IO handling server and message queue."""
 
@@ -92,8 +96,9 @@ class Task:
 
 class Thing:
 
-    def __init__(self, type_, position):
-        self.type = type_
+    def __init__(self, world, type_, position):
+        self.world = world
+        self.type_ = type_
         self.position = position
         self.task = Task('wait')
 
@@ -118,7 +123,32 @@ class Thing:
         else:
             self.set_task('wait')
 
+    def check_task(self, task, *args, **kwargs):
+        if task == 'move':
+            if len(args) > 0:
+                direction = args[0]
+            else:
+                direction = kwargs['direction']
+            test_pos = self.position[:]
+            if direction == 'UP':
+                test_pos[0] -= 1
+            elif direction == 'DOWN':
+                test_pos[0] += 1
+            elif direction == 'RIGHT':
+                test_pos[1] += 1
+            elif direction == 'LEFT':
+                test_pos[1] -= 1
+            if test_pos[0] < 0 or test_pos[1] < 0 or \
+               test_pos[0] >= self.world.map_size[0] or \
+               test_pos[1] >= self.world.map_size[1]:
+                raise GameError('would move outside map bounds')
+            pos_i = test_pos[0] * self.world.map_size[1] + test_pos[1]
+            map_tile = self.world.map_[pos_i]
+            if map_tile != '.':
+                raise GameError('would move into illegal terrain')
+
     def set_task(self, task, *args, **kwargs):
+        self.check_task(task, *args, **kwargs)
         self.task = Task(task, args, kwargs)
 
     def proceed(self, is_AI=True):
@@ -142,12 +172,15 @@ class World:
     def __init__(self):
         self.turn = 0
         self.map_size = (5, 5)
-        self.map_ = 'xxxxx\n' +\
-                    'x...x\n' +\
-                    'x.X.x\n' +\
-                    'x...x\n' +\
+        self.map_ = 'xxxxx' +\
+                    'x...x' +\
+                    'x.X.x' +\
+                    'x...x' +\
                     'xxxxx'
-        self.things = [Thing('human', [3, 3]), Thing('monster', [1, 1])]
+        self.things = [
+            Thing(self, 'human', [3, 3]),
+            Thing(self, 'monster', [1, 1])
+        ]
         self.player_i = 0
         self.player = self.things[self.player_i]
 
@@ -182,6 +215,8 @@ class CommandHandler:
                 command(connection_id=connection_id)
         except ArgError as e:
             self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
+        except GameError as e:
+            self.send_to(connection_id, 'GAME ERROR: ' + str(e))
 
     def send_to(self, connection_id, msg):
         """Send msg to client of connection_id."""
@@ -207,13 +242,25 @@ class CommandHandler:
         quoted += ['"']
         return ''.join(quoted)
 
+    def quoted_map(self, map_string, map_width):
+        """Put \n into map_string at map_width intervals, return quoted whole."""
+        map_lines = []
+        map_size = len(map_string)
+        start_cut = 0
+        while start_cut < map_size:
+            limit = start_cut + map_width
+            map_lines += [map_string[start_cut:limit]]
+            start_cut = limit
+        return self.quoted("\n".join(map_lines))
+
     def send_all_gamestate(self):
         """Send out game state data relevant to clients."""
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.quoted(self.world.map_))
+        self.send_all('TERRAIN\n' + self.quoted_map(self.world.map_,
+                                                    self.world.map_size[1]))
         for thing in self.world.things:
-            self.send_all('THING TYPE:' + thing.type + ' '
+            self.send_all('THING TYPE:' + thing.type_ + ' '
                           + self.stringify_yx(thing.position))
 
     def proceed_to_next_player_turn(self, connection_id):

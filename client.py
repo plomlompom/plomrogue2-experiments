@@ -57,7 +57,7 @@ class Game:
         """Reset self.terrain_map from terrain_map."""
         lines = terrain_map.split('\n')
         if len(lines) != self.map_size[0]:
-            raise ArgError('wrong map height')
+            raise ArgError('wrong map height %s' % len(lines))
         for line in lines:
             if len(line) != self.map_size[1]:
                 raise ArgError('wrong map width')
