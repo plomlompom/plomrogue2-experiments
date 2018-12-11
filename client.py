@@ -9,12 +9,13 @@ from parser import ArgError, Parser
 class Game:
     turn = 0
     log_text = ''
-    map_size = (5, 5)
-    terrain_map = ('?'*5)*5
+    map_size = (0, 0)
+    terrain_map = ''
     things = []
 
     class Thing:
-        def __init__(self, position, symbol):
+        def __init__(self, id_, position, symbol):
+            self.id_ = id_
             self.position = position
             self.symbol = symbol
 
@@ -22,15 +23,33 @@ class Game:
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
 
-    def cmd_THING(self, type_, yx):
-        """Add to self.things at .position yx with .symbol defined by type_."""
+    def get_thing(self, i):
+        for thing in self.things:
+            if i == thing.id_:
+                return thing
+        t = self.Thing(i, [0,0], '?')
+        self.things += [t]
+        return t
+
+    def cmd_THING_TYPE(self, i, type_):
+        t = self.get_thing(i)
         symbol = '?'
-        if type_ == 'TYPE:human':
+        if type_ == 'human':
             symbol = '@'
-        elif type_ == 'TYPE:monster':
+        elif type_ == 'monster':
             symbol = 'm'
-        self.things += [self.Thing(yx, symbol)]
-    cmd_THING.argtypes = 'string yx_tuple:nonneg'
+        t.symbol = symbol
+    cmd_THING_TYPE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_POS(self, i, yx):
+        t = self.get_thing(i)
+        t.position = list(yx)
+    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
+
+    def cmd_THING_POS(self, i, yx):
+        t = self.get_thing(i)
+        t.position = list(yx)
+    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
     def cmd_MAP_SIZE(self, yx):
         """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
@@ -38,8 +57,7 @@ class Game:
         self.map_size = (y, x)
         self.terrain_map = ''
         for y in range(self.map_size[0]):
-            self.terrain_map += '?' * self.map_size[1]# + '\n'
-        self.terrain_map = self.terrain_map[:-1]
+            self.terrain_map += '?' * self.map_size[1]
     cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
 
     def cmd_TURN_FINISHED(self, n):

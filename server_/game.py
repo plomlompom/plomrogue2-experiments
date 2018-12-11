@@ -17,18 +17,14 @@ class World:
 
     def __init__(self):
         self.turn = 0
-        self.map_size = (5, 5)
-        self.map_ = 'xxxxx' +\
-                    'x...x' +\
-                    'x.X.x' +\
-                    'x...x' +\
-                    'xxxxx'
-        self.things = [
-            Thing(self, 'human', [3, 3]),
-            Thing(self, 'monster', [1, 1])
-        ]
-        self.player_i = 0
-        self.player = self.things[self.player_i]
+        self.map_size = (0, 0)
+        self.map_ = ''
+        self.things = []
+#            Thing(self, 'human', [3, 3]),
+#            Thing(self, 'monster', [1, 1])
+#        ]
+        self.player_id = 0
+#        self.player = self.things[self.player_i]
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -43,14 +39,41 @@ class World:
         the player's task is finished, the loop breaks.
         """
         while True:
-            for thing in self.things[self.player_i+1:]:
+            for thing in self.things[self.player_id+1:]:
                 thing.proceed()
             self.turn += 1
-            for thing in self.things[:self.player_i]:
+            for thing in self.things[:self.player_id]:
                 thing.proceed()
-            self.player.proceed(is_AI=False)
-            if self.player.task is None:
+            player = self.get_thing(self.player_id)
+            player.proceed(is_AI=False)
+            if player.task is None:
                 break
+
+    def set_map_size(self, yx):
+        y, x = yx
+        self.map_size = (y, x)
+        self.map_ = ''
+        for y in range(self.map_size[0]):
+            self.map_ += '?' * self.map_size[1]
+
+    def set_map_line(self, y, line):
+        width_map = self.map_size[1]
+        if y >= self.map_size[0]:
+            raise ArgError('too large row number %s' % y)
+        width_line = len(line)
+        if width_line > width_map:
+            raise ArgError('too large map line width %s' % width_line)
+        self.map_ = self.map_[:y * width_map] + line + \
+                    self.map_[(y + 1) * width_map:]
+
+    def get_thing(self, i):
+        for thing in self.things:
+            if i == thing.id_:
+                return thing
+        t = Thing(self, i, '?', [0,0])
+        self.things += [t]
+        return t
+
 
 class Task:
 
@@ -81,8 +104,9 @@ class Task:
 
 class Thing:
 
-    def __init__(self, world, type_, position):
+    def __init__(self, world, id_, type_, position):
         self.world = world
+        self.id_ = id_
         self.type_ = type_
         self.position = position
         self.task = Task(self, 'wait')
@@ -101,8 +125,8 @@ class Thing:
         else:
             self.set_task('wait')
 
-    def set_task(self, task, *args, **kwargs):
-        self.task = Task(self, task, args, kwargs)
+    def set_task(self, task_name, *args, **kwargs):
+        self.task = Task(self, task_name, args, kwargs)
         self.task.check()
 
     def proceed(self, is_AI=True):

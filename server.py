@@ -94,9 +94,9 @@ def fib(n):
 
 class CommandHandler:
 
-    def __init__(self, queues_out={}):
+    def __init__(self):
         from multiprocessing import Pool
-        self.queues_out = queues_out
+        self.queues_out = {}
         self.world = World()
         self.parser = Parser(self)
         # self.pool and self.pool_result are currently only needed by the FIB
@@ -157,8 +157,8 @@ class CommandHandler:
             terrain_line = self.world.map_[y * width:(y + 1) * width]
             self.send_all('TERRAIN_LINE %5s %s' % (y, self.quoted(terrain_line)))
         for thing in self.world.things:
-            self.send_all('THING TYPE:' + thing.type_ + ' '
-                          + self.stringify_yx(thing.position))
+            self.send_all('THING_TYPE %s %s' % (thing.id_, thing.type_))
+            self.send_all('THING_POS %s %s' % (thing.id_, self.stringify_yx(thing.position)))
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
@@ -170,19 +170,40 @@ class CommandHandler:
         self.world.proceed_to_next_player_turn()
         self.send_all_gamestate()
 
+    def get_player(self):
+        return self.world.get_thing(self.world.player_id)
+
     def cmd_MOVE(self, direction, connection_id):
         """Set player task to 'move' with direction arg, finish player turn."""
         if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
             raise ArgError('Move argument must be one of: '
                            'UP, DOWN, RIGHT, LEFT')
-        self.world.player.set_task('move', direction=direction)
+        self.get_player().set_task('move', direction=direction)
         self.proceed()
     cmd_MOVE.argtypes = 'string'
 
     def cmd_WAIT(self, connection_id):
         """Set player task to 'wait', finish player turn."""
-        self.world.player.set_task('wait')
+        self.get_player().set_task('wait')
         self.proceed()
+
+    def cmd_MAP_SIZE(self, yx, connection_id):
+        self.world.set_map_size(yx)
+    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
+
+    def cmd_TERRAIN_LINE(self, y, line, connection_id):
+        self.world.set_map_line(y, line)
+    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_TYPE(self, i, type_, connection_id):
+        t = self.world.get_thing(i)
+        t.type_ = type_
+    cmd_THING_TYPE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_POS(self, i, yx, connection_id):
+        t = self.world.get_thing(i)
+        t.position = list(yx)
+    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
     def cmd_GET_TURN(self, connection_id):
         """Send world.turn to caller."""
@@ -279,6 +300,17 @@ if os.path.exists(game_file_name):
             line = lines[i]
             print("FILE INPUT LINE %s: %s" % (i, line), end='')
             commander.handle_input(line, abort_on_error=True)
+else:
+    commander.handle_input('MAP_SIZE Y:5,X:5')
+    commander.handle_input('TERRAIN_LINE 0 "xxxxx"')
+    commander.handle_input('TERRAIN_LINE 1 "x...x"')
+    commander.handle_input('TERRAIN_LINE 2 "x.X.x"')
+    commander.handle_input('TERRAIN_LINE 3 "x...x"')
+    commander.handle_input('TERRAIN_LINE 4 "xxxxx"')
+    commander.handle_input('THING_TYPE 0 human')
+    commander.handle_input('THING_POS 0 Y:3,X:3')
+    commander.handle_input('THING_TYPE 1 monster')
+    commander.handle_input('THING_POS 1 Y:1,X:1')
 q = queue.Queue()
 c = threading.Thread(target=io_loop, daemon=True, args=(q, commander))
 c.start()
