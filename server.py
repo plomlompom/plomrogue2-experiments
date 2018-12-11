@@ -6,7 +6,7 @@ import queue
 import sys
 import os
 from parser import ArgError, Parser
-from server_.game import World, GameError
+from game import World, GameError
 
 
 # Avoid "Address already in use" errors.
@@ -154,7 +154,7 @@ class CommandHandler:
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
         for y in range(self.world.map_size[0]):
             width = self.world.map_size[1]
-            terrain_line = self.world.map_[y * width:(y + 1) * width]
+            terrain_line = self.world.terrain_map[y * width:(y + 1) * width]
             self.send_all('TERRAIN_LINE %5s %s' % (y, self.quoted(terrain_line)))
         for thing in self.world.things:
             self.send_all('THING_TYPE %s %s' % (thing.id_, thing.type_))

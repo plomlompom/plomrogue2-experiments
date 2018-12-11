@@ -18,13 +18,9 @@ class World:
     def __init__(self):
         self.turn = 0
         self.map_size = (0, 0)
-        self.map_ = ''
+        self.terrain_map = ''
         self.things = []
-#            Thing(self, 'human', [3, 3]),
-#            Thing(self, 'monster', [1, 1])
-#        ]
         self.player_id = 0
-#        self.player = self.things[self.player_i]
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -52,9 +48,9 @@ class World:
     def set_map_size(self, yx):
         y, x = yx
         self.map_size = (y, x)
-        self.map_ = ''
+        self.terrain_map = ''
         for y in range(self.map_size[0]):
-            self.map_ += '?' * self.map_size[1]
+            self.terrain_map += '?' * self.map_size[1]
 
     def set_map_line(self, y, line):
         width_map = self.map_size[1]
@@ -63,8 +59,8 @@ class World:
         width_line = len(line)
         if width_line > width_map:
             raise ArgError('too large map line width %s' % width_line)
-        self.map_ = self.map_[:y * width_map] + line + \
-                    self.map_[(y + 1) * width_map:]
+        self.terrain_map = self.terrain_map[:y * width_map] + line + \
+                           self.terrain_map[(y + 1) * width_map:]
 
     def get_thing(self, i):
         for thing in self.things:
@@ -97,7 +93,7 @@ class Task:
                test_pos[1] >= self.thing.world.map_size[1]:
                 raise GameError('would move outside map bounds')
             pos_i = test_pos[0] * self.thing.world.map_size[1] + test_pos[1]
-            map_tile = self.thing.world.map_[pos_i]
+            map_tile = self.thing.world.terrain_map[pos_i]
             if map_tile != '.':
                 raise GameError('would move into illegal terrain')
 

@@ -4,35 +4,25 @@ import plom_socket_io
 import socket
 import threading
 from parser import ArgError, Parser
+from game import World
 
+
+class Thing:
+    def __init__(self, id_, position, symbol):
+        self.id_ = id_
+        self.symbol = symbol
+        self.position = position
 
 class Game:
-    turn = 0
+    world = World()
     log_text = ''
-    map_size = (0, 0)
-    terrain_map = ''
-    things = []
-
-    class Thing:
-        def __init__(self, id_, position, symbol):
-            self.id_ = id_
-            self.position = position
-            self.symbol = symbol
 
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
 
-    def get_thing(self, i):
-        for thing in self.things:
-            if i == thing.id_:
-                return thing
-        t = self.Thing(i, [0,0], '?')
-        self.things += [t]
-        return t
-
     def cmd_THING_TYPE(self, i, type_):
-        t = self.get_thing(i)
+        t = self.world.get_thing(i)
         symbol = '?'
         if type_ == 'human':
             symbol = '@'
@@ -42,22 +32,18 @@ class Game:
     cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
     def cmd_THING_POS(self, i, yx):
-        t = self.get_thing(i)
+        t = self.world.get_thing(i)
         t.position = list(yx)
     cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
     def cmd_THING_POS(self, i, yx):
-        t = self.get_thing(i)
+        t = self.world.get_thing(i)
         t.position = list(yx)
     cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
     def cmd_MAP_SIZE(self, yx):
         """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
-        y, x = yx
-        self.map_size = (y, x)
-        self.terrain_map = ''
-        for y in range(self.map_size[0]):
-            self.terrain_map += '?' * self.map_size[1]
+        self.world.set_map_size(yx)
     cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
 
     def cmd_TURN_FINISHED(self, n):
@@ -67,19 +53,12 @@ class Game:
 
     def cmd_NEW_TURN(self, n):
         """Set self.turn to n, empty self.things."""
-        self.turn = n
-        self.things = []
+        self.world.turn = n
+        self.world.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
     def cmd_TERRAIN_LINE(self, y, terrain_line):
-        width_map = self.map_size[1]
-        if y >= self.map_size[0]:
-            raise ArgError('too large row number %s' % y)
-        width_line = len(terrain_line)
-        if width_line > width_map:
-            raise ArgError('too large map line width %s' % width_line)
-        self.terrain_map = self.terrain_map[:y * width_map] + \
-                           terrain_line + self.terrain_map[(y + 1) * width_map:]
+        self.world.set_map_line(y, terrain_line)
     cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
 
@@ -100,13 +79,13 @@ class WidgetManager:
     def draw_map(self):
         """Draw map view from .game.terrain_map, .game.things."""
         map_lines = []
-        map_size = len(self.game.terrain_map)
+        map_size = len(self.game.world.terrain_map)
         start_cut = 0
         while start_cut < map_size:
-            limit = start_cut + self.game.map_size[1]
-            map_lines += [self.game.terrain_map[start_cut:limit]]
+            limit = start_cut + self.game.world.map_size[1]
+            map_lines += [self.game.world.terrain_map[start_cut:limit]]
             start_cut = limit
-        for t in self.game.things:
+        for t in self.game.world.things:
             line_as_list = list(map_lines[t.position[0]])
             line_as_list[t.position[1]] = t.symbol
             map_lines[t.position[0]] = ''.join(line_as_list)
@@ -114,7 +93,7 @@ class WidgetManager:
 
     def update(self):
         """Redraw all non-edit widgets."""
-        self.turn_widget.set_text('TURN: ' + str(self.game.turn))
+        self.turn_widget.set_text('TURN: ' + str(self.game.world.turn))
         self.log_widget.set_text(self.game.log_text)
         self.map_widget.set_text(self.draw_map())
 
