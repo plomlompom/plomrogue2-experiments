@@ -10,7 +10,7 @@ class Game:
     turn = 0
     log_text = ''
     map_size = (5, 5)
-    terrain_map = ('?'*5+'\n')*4+'?'*5
+    terrain_map = ('?'*5)*5
     things = []
 
     class Thing:
@@ -38,7 +38,7 @@ class Game:
         self.map_size = (y, x)
         self.terrain_map = ''
         for y in range(self.map_size[0]):
-            self.terrain_map += '?' * self.map_size[1] + '\n'
+            self.terrain_map += '?' * self.map_size[1]# + '\n'
         self.terrain_map = self.terrain_map[:-1]
     cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
 
@@ -53,16 +53,16 @@ class Game:
         self.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
-    def cmd_TERRAIN(self, terrain_map):
-        """Reset self.terrain_map from terrain_map."""
-        lines = terrain_map.split('\n')
-        if len(lines) != self.map_size[0]:
-            raise ArgError('wrong map height %s' % len(lines))
-        for line in lines:
-            if len(line) != self.map_size[1]:
-                raise ArgError('wrong map width')
-        self.terrain_map = terrain_map
-    cmd_TERRAIN.argtypes = 'string'
+    def cmd_TERRAIN_LINE(self, y, terrain_line):
+        width_map = self.map_size[1]
+        if y >= self.map_size[0]:
+            raise ArgError('too large row number %s' % y)
+        width_line = len(terrain_line)
+        if width_line > width_map:
+            raise ArgError('too large map line width %s' % width_line)
+        self.terrain_map = self.terrain_map[:y * width_map] + \
+                           terrain_line + self.terrain_map[(y + 1) * width_map:]
+    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
 
 class WidgetManager:
@@ -81,13 +81,18 @@ class WidgetManager:
 
     def draw_map(self):
         """Draw map view from .game.terrain_map, .game.things."""
-        whole_map = []
-        for c in self.game.terrain_map:
-            whole_map += [c]
+        map_lines = []
+        map_size = len(self.game.terrain_map)
+        start_cut = 0
+        while start_cut < map_size:
+            limit = start_cut + self.game.map_size[1]
+            map_lines += [self.game.terrain_map[start_cut:limit]]
+            start_cut = limit
         for t in self.game.things:
-            pos_i = t.position[0] * (self.game.map_size[1] + 1) + t.position[1]
-            whole_map[pos_i] = t.symbol
-        return ''.join(whole_map)
+            line_as_list = list(map_lines[t.position[0]])
+            line_as_list[t.position[1]] = t.symbol
+            map_lines[t.position[0]] = ''.join(line_as_list)
+        return "\n".join(map_lines)
 
     def update(self):
         """Redraw all non-edit widgets."""

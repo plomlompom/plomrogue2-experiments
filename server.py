@@ -3,6 +3,8 @@
 import socketserver
 import threading
 import queue
+import sys
+import os
 from parser import ArgError, Parser
 from server_.game import World, GameError
 
@@ -92,7 +94,7 @@ def fib(n):
 
 class CommandHandler:
 
-    def __init__(self, queues_out):
+    def __init__(self, queues_out={}):
         from multiprocessing import Pool
         self.queues_out = queues_out
         self.world = World()
@@ -102,7 +104,7 @@ class CommandHandler:
         self.pool = Pool()
         self.pool_result = None
 
-    def handle_input(self, input_, connection_id):
+    def handle_input(self, input_, connection_id=None, abort_on_error=False):
         """Process input_ to command grammar, call command handler if found."""
         try:
             command = self.parser.parse(input_)
@@ -112,12 +114,19 @@ class CommandHandler:
                 command(connection_id=connection_id)
         except ArgError as e:
             self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
+            if abort_on_error:
+                exit(1)
         except GameError as e:
             self.send_to(connection_id, 'GAME ERROR: ' + str(e))
+            if abort_on_error:
+                exit(1)
 
     def send_to(self, connection_id, msg):
-        """Send msg to client of connection_id."""
-        self.queues_out[connection_id].put(msg)
+        """Send msg to client of connection_id; if no later, print instead."""
+        if connection_id:
+            self.queues_out[connection_id].put(msg)
+        else:
+            print(msg)
 
     def send_all(self, msg):
         """Send msg to all clients."""
@@ -139,49 +148,26 @@ class CommandHandler:
         quoted += ['"']
         return ''.join(quoted)
 
-    def quoted_map(self, map_string, map_width):
-        """Put \n into map_string at map_width intervals, return quoted whole."""
-        map_lines = []
-        map_size = len(map_string)
-        start_cut = 0
-        while start_cut < map_size:
-            limit = start_cut + map_width
-            map_lines += [map_string[start_cut:limit]]
-            start_cut = limit
-        return self.quoted("\n".join(map_lines))
-
     def send_all_gamestate(self):
         """Send out game state data relevant to clients."""
         self.send_all('NEW_TURN ' + str(self.world.turn))
         self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
-        self.send_all('TERRAIN\n' + self.quoted_map(self.world.map_,
-                                                    self.world.map_size[1]))
+        for y in range(self.world.map_size[0]):
+            width = self.world.map_size[1]
+            terrain_line = self.world.map_[y * width:(y + 1) * width]
+            self.send_all('TERRAIN_LINE %5s %s' % (y, self.quoted(terrain_line)))
         for thing in self.world.things:
             self.send_all('THING TYPE:' + thing.type_ + ' '
                           + self.stringify_yx(thing.position))
 
-    def proceed_to_next_player_turn(self, connection_id):
-        """Run game world turns until player can decide their next step.
+    def proceed(self):
+        """Send turn finish signal, run game world, send new world data.
 
-        Sends a 'TURN_FINISHED' message, then iterates through all non-player
-        things, on each step furthering them in their tasks (and letting them
-        decide new ones if they finish). The iteration order is: first all
-        things that come after the player in the world things list, then (after
-        incrementing the world turn) all that come before the player; then the
-        player's .proceed() is run, and if it does not finish his task, the
-        loop starts at the beginning. Once the player's task is finished, the
-        loop breaks, and client-relevant game data is sent.
+        First sends 'TURN_FINISHED' message, then runs game world
+        until new player input is needed, then sends game state.
         """
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
-        while True:
-            for thing in self.world.things[self.world.player_i+1:]:
-                thing.proceed()
-            self.world.turn += 1
-            for thing in self.world.things[:self.world.player_i]:
-                thing.proceed()
-            self.world.player.proceed(is_AI=False)
-            if self.world.player.task is None:
-                break
+        self.world.proceed_to_next_player_turn()
         self.send_all_gamestate()
 
     def cmd_MOVE(self, direction, connection_id):
@@ -190,13 +176,13 @@ class CommandHandler:
             raise ArgError('Move argument must be one of: '
                            'UP, DOWN, RIGHT, LEFT')
         self.world.player.set_task('move', direction=direction)
-        self.proceed_to_next_player_turn(connection_id)
+        self.proceed()
     cmd_MOVE.argtypes = 'string'
 
     def cmd_WAIT(self, connection_id):
         """Set player task to 'wait', finish player turn."""
         self.world.player.set_task('wait')
-        self.proceed_to_next_player_turn(connection_id)
+        self.proceed()
 
     def cmd_GET_TURN(self, connection_id):
         """Send world.turn to caller."""
@@ -248,7 +234,7 @@ class CommandHandler:
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
 
-def io_loop(q):
+def io_loop(q, commander):
     """Handle commands coming through queue q, send results back.
 
     Commands from q are expected to be tuples, with the first element either
@@ -262,26 +248,39 @@ def io_loop(q):
     which to send replies.
 
     A 'COMMAND' command is specified in greater detail by a string that is the
-    tuple's third element. CommandHandler takes care of processing this and
-    sending out replies.
+    tuple's third element. The commander CommandHandler takes care of processing
+    this and sending out replies.
     """
-    queues_out = {}
-    command_handler = CommandHandler(queues_out)
     while True:
         x = q.get()
         command_type = x[0]
         connection_id = x[1]
         content = None if len(x) == 2 else x[2]
         if command_type == 'ADD_QUEUE':
-            queues_out[connection_id] = content
+            commander.queues_out[connection_id] = content
         elif command_type == 'COMMAND':
-            command_handler.handle_input(content, connection_id)
+            commander.handle_input(content, connection_id)
         elif command_type == 'KILL_QUEUE':
-            del queues_out[connection_id]
+            del commander.queues_out[connection_id]
 
 
+if len(sys.argv) != 2:
+    print('wrong number of arguments, expected one (game file)')
+    exit(1)
+game_file_name = sys.argv[1]
+commander = CommandHandler()
+if os.path.exists(game_file_name):
+    if not os.path.isfile(game_file_name):
+        print('game file name does not refer to a valid game file')
+    else:
+        with open(game_file_name, 'r') as f:
+            lines = f.readlines()
+        for i in range(len(lines)):
+            line = lines[i]
+            print("FILE INPUT LINE %s: %s" % (i, line), end='')
+            commander.handle_input(line, abort_on_error=True)
 q = queue.Queue()
-c = threading.Thread(target=io_loop, daemon=True, args=(q,))
+c = threading.Thread(target=io_loop, daemon=True, args=(q, commander))
 c.start()
 server = Server(q, ('localhost', 5000), IO_Handler)
 try:

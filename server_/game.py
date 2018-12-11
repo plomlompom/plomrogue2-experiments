@@ -13,6 +13,45 @@ def move_pos(direction, pos_yx):
         pos_yx[1] -= 1
 
 
+class World:
+
+    def __init__(self):
+        self.turn = 0
+        self.map_size = (5, 5)
+        self.map_ = 'xxxxx' +\
+                    'x...x' +\
+                    'x.X.x' +\
+                    'x...x' +\
+                    'xxxxx'
+        self.things = [
+            Thing(self, 'human', [3, 3]),
+            Thing(self, 'monster', [1, 1])
+        ]
+        self.player_i = 0
+        self.player = self.things[self.player_i]
+
+    def proceed_to_next_player_turn(self):
+        """Run game world turns until player can decide their next step.
+
+        Iterates through all non-player things, on each step
+        furthering them in their tasks (and letting them decide new
+        ones if they finish). The iteration order is: first all things
+        that come after the player in the world things list, then
+        (after incrementing the world turn) all that come before the
+        player; then the player's .proceed() is run, and if it does
+        not finish his task, the loop starts at the beginning. Once
+        the player's task is finished, the loop breaks.
+        """
+        while True:
+            for thing in self.things[self.player_i+1:]:
+                thing.proceed()
+            self.turn += 1
+            for thing in self.things[:self.player_i]:
+                thing.proceed()
+            self.player.proceed(is_AI=False)
+            if self.player.task is None:
+                break
+
 class Task:
 
     def __init__(self, thing, name, args=(), kwargs={}):
@@ -80,21 +119,3 @@ class Thing:
             self.task = None
         if is_AI and self.task is None:
             self.decide_task()
-
-
-class World:
-
-    def __init__(self):
-        self.turn = 0
-        self.map_size = (5, 5)
-        self.map_ = 'xxxxx' +\
-                    'x...x' +\
-                    'x.X.x' +\
-                    'x...x' +\
-                    'xxxxx'
-        self.things = [
-            Thing(self, 'human', [3, 3]),
-            Thing(self, 'monster', [1, 1])
-        ]
-        self.player_i = 0
-        self.player = self.things[self.player_i]
