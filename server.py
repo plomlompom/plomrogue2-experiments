@@ -106,12 +106,16 @@ class CommandHandler:
 
     def handle_input(self, input_, connection_id=None, abort_on_error=False):
         """Process input_ to command grammar, call command handler if found."""
+        from inspect import signature
         try:
             command = self.parser.parse(input_)
             if command is None:
                 self.send_to(connection_id, 'UNHANDLED INPUT')
             else:
-                command(connection_id=connection_id)
+                if 'connection_id' in list(signature(command).parameters):
+                    command(connection_id=connection_id)
+                else:
+                    command()
         except ArgError as e:
             self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
             if abort_on_error:
@@ -170,7 +174,7 @@ class CommandHandler:
         self.world.proceed_to_next_player_turn()
         self.send_all_gamestate()
 
-    def cmd_MOVE(self, direction, connection_id):
+    def cmd_MOVE(self, direction):
         """Set player task to 'move' with direction arg, finish player turn."""
         if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
             raise ArgError('Move argument must be one of: '
@@ -179,25 +183,25 @@ class CommandHandler:
         self.proceed()
     cmd_MOVE.argtypes = 'string'
 
-    def cmd_WAIT(self, connection_id):
+    def cmd_WAIT(self):
         """Set player task to 'wait', finish player turn."""
         self.world.get_player().set_task('wait')
         self.proceed()
 
-    def cmd_MAP_SIZE(self, yx, connection_id):
+    def cmd_MAP_SIZE(self, yx):
         self.world.set_map_size(yx)
     cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
 
-    def cmd_TERRAIN_LINE(self, y, line, connection_id):
+    def cmd_TERRAIN_LINE(self, y, line):
         self.world.set_map_line(y, line)
     cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
-    def cmd_THING_TYPE(self, i, type_, connection_id):
+    def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)
         t.type_ = type_
     cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
-    def cmd_THING_POS(self, i, yx, connection_id):
+    def cmd_THING_POS(self, i, yx):
         t = self.world.get_thing(i)
         t.position = list(yx)
     cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
