@@ -7,12 +7,6 @@ from parser import ArgError, Parser
 from game_common import World
 
 
-class Thing:
-    def __init__(self, id_, position, symbol):
-        self.id_ = id_
-        self.symbol = symbol
-        self.position = position
-
 class Game:
     world = World()
     log_text = ''
@@ -21,25 +15,32 @@ class Game:
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
 
-    def cmd_THING_TYPE(self, i, type_):
-        t = self.world.get_thing(i)
+    def symbol_for_type(self, type_):
         symbol = '?'
         if type_ == 'human':
             symbol = '@'
         elif type_ == 'monster':
             symbol = 'm'
-        t.symbol = symbol
+        return symbol
+
+    def cmd_MAP_SIZE(self, yx):
+        """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
+        self.world.set_map_size(yx)
+    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
+
+    def cmd_TERRAIN_LINE(self, y, terrain_line):
+        self.world.set_map_line(y, terrain_line)
+    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_TYPE(self, i, type_):
+        t = self.world.get_thing(i)
+        t.type_ = type_
     cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
     def cmd_THING_POS(self, i, yx):
         t = self.world.get_thing(i)
         t.position = list(yx)
     cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
-
-    def cmd_MAP_SIZE(self, yx):
-        """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
-        self.world.set_map_size(yx)
-    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
 
     def cmd_TURN_FINISHED(self, n):
         """Do nothing. (This may be extended later.)"""
@@ -51,10 +52,6 @@ class Game:
         self.world.turn = n
         self.world.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
-
-    def cmd_TERRAIN_LINE(self, y, terrain_line):
-        self.world.set_map_line(y, terrain_line)
-    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
 
 class WidgetManager:
@@ -82,7 +79,7 @@ class WidgetManager:
             start_cut = limit
         for t in self.game.world.things:
             line_as_list = list(map_lines[t.position[0]])
-            line_as_list[t.position[1]] = t.symbol
+            line_as_list[t.position[1]] = self.game.symbol_for_type(t.type_)
             map_lines[t.position[0]] = ''.join(line_as_list)
         return "\n".join(map_lines)
 
