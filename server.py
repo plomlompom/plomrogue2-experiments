@@ -170,21 +170,18 @@ class CommandHandler:
         self.world.proceed_to_next_player_turn()
         self.send_all_gamestate()
 
-    def get_player(self):
-        return self.world.get_thing(self.world.player_id)
-
     def cmd_MOVE(self, direction, connection_id):
         """Set player task to 'move' with direction arg, finish player turn."""
         if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
             raise ArgError('Move argument must be one of: '
                            'UP, DOWN, RIGHT, LEFT')
-        self.get_player().set_task('move', direction=direction)
+        self.world.get_player().set_task('move', direction=direction)
         self.proceed()
     cmd_MOVE.argtypes = 'string'
 
     def cmd_WAIT(self, connection_id):
         """Set player task to 'wait', finish player turn."""
-        self.get_player().set_task('wait')
+        self.world.get_player().set_task('wait')
         self.proceed()
 
     def cmd_MAP_SIZE(self, yx, connection_id):

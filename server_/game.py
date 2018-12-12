@@ -38,15 +38,19 @@ class World(game_common.World):
         the player's task is finished, the loop breaks.
         """
         while True:
-            for thing in self.things[self.player_id+1:]:
+            player = self.get_player()
+            player_i = self.things.index(player)
+            for thing in self.things[player_i+1:]:
                 thing.proceed()
             self.turn += 1
-            for thing in self.things[:self.player_id]:
+            for thing in self.things[:player_i]:
                 thing.proceed()
-            player = self.get_thing(self.player_id)
             player.proceed(is_AI=False)
             if player.task is None:
                 break
+
+    def get_player(self):
+        return self.get_thing(self.player_id)
 
 
 class Task:

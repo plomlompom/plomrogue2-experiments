@@ -27,11 +27,11 @@ class World:
         self.terrain_map = self.terrain_map[:y * width_map] + line + \
                            self.terrain_map[(y + 1) * width_map:]
 
-    def get_thing(self, i):
+    def get_thing(self, id_):
         for thing in self.things:
-            if i == thing.id_:
+            if id_ == thing.id_:
                 return thing
-        t = self.Thing(self, i)
+        t = self.Thing(self, id_)
         self.things += [t]
         return t
 
