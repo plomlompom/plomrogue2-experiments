@@ -43,3 +43,25 @@ class Thing:
         self.id_ = id_
         self.type_ = '?'
         self.position = [0,0]
+
+
+class Commander:
+
+    def cmd_MAP_SIZE(self, yx):
+        """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
+        self.world.set_map_size(yx)
+    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
+
+    def cmd_TERRAIN_LINE(self, y, terrain_line):
+        self.world.set_map_line(y, terrain_line)
+    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_TYPE(self, i, type_):
+        t = self.world.get_thing(i)
+        t.type_ = type_
+    cmd_THING_TYPE.argtypes = 'int:nonneg string'
+
+    def cmd_THING_POS(self, i, yx):
+        t = self.world.get_thing(i)
+        t.position = list(yx)
+    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'

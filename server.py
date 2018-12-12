@@ -7,6 +7,7 @@ import sys
 import os
 from parser import ArgError, Parser
 from server_.game import World, GameError
+from game_common import Commander
 
 
 # Avoid "Address already in use" errors.
@@ -92,7 +93,7 @@ def fib(n):
         return fib(n-1) + fib(n-2)
 
 
-class CommandHandler:
+class CommandHandler(Commander):
 
     def __init__(self):
         from multiprocessing import Pool
@@ -189,24 +190,6 @@ class CommandHandler:
         """Set player task to 'wait', finish player turn."""
         self.world.get_player().set_task('wait')
         self.proceed()
-
-    def cmd_MAP_SIZE(self, yx):
-        self.world.set_map_size(yx)
-    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
-
-    def cmd_TERRAIN_LINE(self, y, line):
-        self.world.set_map_line(y, line)
-    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
-
-    def cmd_THING_TYPE(self, i, type_):
-        t = self.world.get_thing(i)
-        t.type_ = type_
-    cmd_THING_TYPE.argtypes = 'int:nonneg string'
-
-    def cmd_THING_POS(self, i, yx):
-        t = self.world.get_thing(i)
-        t.position = list(yx)
-    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
     def cmd_GET_TURN(self, connection_id):
         """Send world.turn to caller."""
