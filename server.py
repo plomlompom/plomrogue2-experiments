@@ -6,7 +6,7 @@ import queue
 import sys
 import os
 from parser import ArgError, Parser
-from game import World, GameError
+from server_.game import World, GameError
 
 
 # Avoid "Address already in use" errors.

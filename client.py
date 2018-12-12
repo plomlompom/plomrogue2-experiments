@@ -4,7 +4,7 @@ import plom_socket_io
 import socket
 import threading
 from parser import ArgError, Parser
-from game import World
+from game_common import World
 
 
 class Thing:

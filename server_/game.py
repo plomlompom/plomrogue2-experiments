@@ -1,3 +1,8 @@
+import sys
+sys.path.append('../')
+import game_common
+
+
 class GameError(Exception):
     pass
 
@@ -13,13 +18,11 @@ def move_pos(direction, pos_yx):
         pos_yx[1] -= 1
 
 
-class World:
+class World(game_common.World):
 
     def __init__(self):
-        self.turn = 0
-        self.map_size = (0, 0)
-        self.terrain_map = ''
-        self.things = []
+        super().__init__()
+        self.Thing = Thing  # use local Thing class instead of game_common's
         self.player_id = 0
 
     def proceed_to_next_player_turn(self):
@@ -44,31 +47,6 @@ class World:
             player.proceed(is_AI=False)
             if player.task is None:
                 break
-
-    def set_map_size(self, yx):
-        y, x = yx
-        self.map_size = (y, x)
-        self.terrain_map = ''
-        for y in range(self.map_size[0]):
-            self.terrain_map += '?' * self.map_size[1]
-
-    def set_map_line(self, y, line):
-        width_map = self.map_size[1]
-        if y >= self.map_size[0]:
-            raise ArgError('too large row number %s' % y)
-        width_line = len(line)
-        if width_line > width_map:
-            raise ArgError('too large map line width %s' % width_line)
-        self.terrain_map = self.terrain_map[:y * width_map] + line + \
-                           self.terrain_map[(y + 1) * width_map:]
-
-    def get_thing(self, i):
-        for thing in self.things:
-            if i == thing.id_:
-                return thing
-        t = Thing(self, i, '?', [0,0])
-        self.things += [t]
-        return t
 
 
 class Task:
@@ -98,13 +76,10 @@ class Task:
                 raise GameError('would move into illegal terrain')
 
 
-class Thing:
+class Thing(game_common.Thing):
 
-    def __init__(self, world, id_, type_, position):
-        self.world = world
-        self.id_ = id_
-        self.type_ = type_
-        self.position = position
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.task = Task(self, 'wait')
 
     def task_wait(self):
