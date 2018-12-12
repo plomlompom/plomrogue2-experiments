@@ -36,11 +36,6 @@ class Game:
         t.position = list(yx)
     cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
-    def cmd_THING_POS(self, i, yx):
-        t = self.world.get_thing(i)
-        t.position = list(yx)
-    cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
-
     def cmd_MAP_SIZE(self, yx):
         """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
         self.world.set_map_size(yx)
