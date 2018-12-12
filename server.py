@@ -137,32 +137,34 @@ class CommandHandler:
         for connection_id in self.queues_out:
             self.send_to(connection_id, msg)
 
-    def stringify_yx(self, tuple_):
-        """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
-        return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
-
-    def quoted(self, string):
-        """Quote and escape string so client interprets it as single token."""
-        quoted = []
-        quoted += ['"']
-        for c in string:
-            if c in {'"', '\\'}:
-                quoted += ['\\']
-            quoted += [c]
-        quoted += ['"']
-        return ''.join(quoted)
-
     def send_all_gamestate(self):
         """Send out game state data relevant to clients."""
+
+        def stringify_yx(tuple_):
+            """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
+            return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
+
+        def quoted(string):
+            """Quote & escape string so client interprets it as single token."""
+            quoted = []
+            quoted += ['"']
+            for c in string:
+                if c in {'"', '\\'}:
+                    quoted += ['\\']
+                quoted += [c]
+            quoted += ['"']
+            return ''.join(quoted)
+
         self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('MAP_SIZE ' + self.stringify_yx(self.world.map_size))
+        self.send_all('MAP_SIZE ' + stringify_yx(self.world.map_size))
         for y in range(self.world.map_size[0]):
             width = self.world.map_size[1]
             terrain_line = self.world.terrain_map[y * width:(y + 1) * width]
-            self.send_all('TERRAIN_LINE %5s %s' % (y, self.quoted(terrain_line)))
+            self.send_all('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
         for thing in self.world.things:
             self.send_all('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.send_all('THING_POS %s %s' % (thing.id_, self.stringify_yx(thing.position)))
+            self.send_all('THING_POS %s %s' % (thing.id_,
+                                               stringify_yx(thing.position)))
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
