@@ -5,9 +5,9 @@ import threading
 import queue
 import sys
 import os
-from parser import ArgError, Parser
-from server_.game import World, GameError
-from game_common import Commander
+import parser
+import server_.game
+import game_common
 
 
 # Avoid "Address already in use" errors.
@@ -93,13 +93,13 @@ def fib(n):
         return fib(n-1) + fib(n-2)
 
 
-class CommandHandler(Commander):
+class CommandHandler(game_common.Commander, server_.game.Commander):
 
     def __init__(self):
         from multiprocessing import Pool
         self.queues_out = {}
-        self.world = World()
-        self.parser = Parser(self)
+        self.world = server_.game.World()
+        self.parser = parser.Parser(self)
         # self.pool and self.pool_result are currently only needed by the FIB
         # command and the demo of a parallelized game loop in cmd_inc_p.
         self.pool = Pool()
@@ -117,11 +117,11 @@ class CommandHandler(Commander):
                     command(connection_id=connection_id)
                 else:
                     command()
-        except ArgError as e:
+        except parser.ArgError as e:
             self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
             if abort_on_error:
                 exit(1)
-        except GameError as e:
+        except server_.game.GameError as e:
             self.send_to(connection_id, 'GAME ERROR: ' + str(e))
             if abort_on_error:
                 exit(1)
@@ -176,34 +176,6 @@ class CommandHandler(Commander):
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
         self.send_all_gamestate()
-
-    def cmd_MOVE(self, direction):
-        """Set player task to 'move' with direction arg, finish player turn."""
-        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
-            raise ArgError('Move argument must be one of: '
-                           'UP, DOWN, RIGHT, LEFT')
-        self.world.get_player().set_task('move', direction=direction)
-        self.proceed()
-    cmd_MOVE.argtypes = 'string'
-
-    def cmd_WAIT(self):
-        """Set player task to 'wait', finish player turn."""
-        self.world.get_player().set_task('wait')
-        self.proceed()
-
-    def cmd_GET_TURN(self, connection_id):
-        """Send world.turn to caller."""
-        self.send_to(connection_id, str(self.world.turn))
-
-    def cmd_ECHO(self, msg, connection_id):
-        """Send msg to caller."""
-        self.send_to(connection_id, msg)
-    cmd_ECHO.argtypes = 'string'
-
-    def cmd_ALL(self, msg, connection_id):
-        """Send msg to all clients."""
-        self.send_all(msg)
-    cmd_ALL.argtypes = 'string'
 
     def cmd_FIB(self, numbers, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].

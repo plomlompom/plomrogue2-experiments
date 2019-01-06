@@ -118,3 +118,34 @@ class Thing(game_common.Thing):
             self.task = None
         if is_AI and self.task is None:
             self.decide_task()
+
+
+class Commander():
+
+    def cmd_MOVE(self, direction):
+        """Set player task to 'move' with direction arg, finish player turn."""
+        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
+            raise parser.ArgError('Move argument must be one of: '
+                                  'UP, DOWN, RIGHT, LEFT')
+        self.world.get_player().set_task('move', direction=direction)
+        self.proceed()
+    cmd_MOVE.argtypes = 'string'
+
+    def cmd_WAIT(self):
+        """Set player task to 'wait', finish player turn."""
+        self.world.get_player().set_task('wait')
+        self.proceed()
+
+    def cmd_GET_TURN(self, connection_id):
+        """Send world.turn to caller."""
+        self.send_to(connection_id, str(self.world.turn))
+
+    def cmd_ECHO(self, msg, connection_id):
+        """Send msg to caller."""
+        self.send_to(connection_id, msg)
+    cmd_ECHO.argtypes = 'string'
+
+    def cmd_ALL(self, msg, connection_id):
+        """Send msg to all clients."""
+        self.send_all(msg)
+    cmd_ALL.argtypes = 'string'
