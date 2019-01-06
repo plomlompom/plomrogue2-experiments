@@ -95,17 +95,19 @@ def fib(n):
 
 class CommandHandler(game_common.Commander, server_.game.Commander):
 
-    def __init__(self):
-        from multiprocessing import Pool
+    def __init__(self, game_file_name):
         self.queues_out = {}
         self.world = server_.game.World()
         self.parser = parser.Parser(self)
+        self.game_file_name = game_file_name
         # self.pool and self.pool_result are currently only needed by the FIB
         # command and the demo of a parallelized game loop in cmd_inc_p.
+        from multiprocessing import Pool
         self.pool = Pool()
         self.pool_result = None
 
-    def handle_input(self, input_, connection_id=None, abort_on_error=False):
+    def handle_input(self, input_, connection_id=None, abort_on_error=False,
+                     store=True):
         """Process input_ to command grammar, call command handler if found."""
         from inspect import signature
         try:
@@ -117,6 +119,9 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
                     command(connection_id=connection_id)
                 else:
                     command()
+                    if store:
+                        with open(self.game_file_name, 'a') as f:
+                            f.write(input_ + '\n')
         except parser.ArgError as e:
             self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
             if abort_on_error:
@@ -247,7 +252,7 @@ if len(sys.argv) != 2:
     print('wrong number of arguments, expected one (game file)')
     exit(1)
 game_file_name = sys.argv[1]
-commander = CommandHandler()
+commander = CommandHandler(game_file_name)
 if os.path.exists(game_file_name):
     if not os.path.isfile(game_file_name):
         print('game file name does not refer to a valid game file')
@@ -257,7 +262,7 @@ if os.path.exists(game_file_name):
         for i in range(len(lines)):
             line = lines[i]
             print("FILE INPUT LINE %s: %s" % (i, line), end='')
-            commander.handle_input(line, abort_on_error=True)
+            commander.handle_input(line, abort_on_error=True, store=False)
 else:
     commander.handle_input('MAP_SIZE Y:5,X:5')
     commander.handle_input('TERRAIN_LINE 0 "xxxxx"')
