@@ -110,7 +110,17 @@ class Thing(game_common.Thing):
         Decrements .task.todo; if it thus falls to <= 0, enacts method whose
         name is 'task_' + self.task.name and sets .task = None. If is_AI, calls
         .decide_task to decide a self.task.
+
+        Before doing anything, checks that task is still possible, and aborts
+        it otherwise (for AI things, decides a new task).
         """
+        try:
+            self.task.check()
+        except GameError:
+            self.task = None
+            if is_AI:
+                self.decide_task()
+            return
         self.task.todo -= 1
         if self.task.todo <= 0:
             task = getattr(self, 'task_' + self.task.name)
