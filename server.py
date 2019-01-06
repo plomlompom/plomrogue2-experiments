@@ -180,6 +180,8 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         """
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
+        msg = str(self.world.get_player().last_task_result)
+        self.send_all('LAST_PLAYER_TASK_RESULT ' + msg)
         self.send_all_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):

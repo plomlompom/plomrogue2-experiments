@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../')
 import game_common
+import parser
 
 
 class GameError(Exception):
@@ -60,7 +61,7 @@ class Task:
         self.thing = thing
         self.args = args
         self.kwargs = kwargs
-        self.todo = 1
+        self.todo = 3
 
     def check(self):
         if self.name == 'move':
@@ -85,12 +86,14 @@ class Thing(game_common.Thing):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.task = Task(self, 'wait')
+        self.last_task_result = None
 
     def task_wait(self):
-        pass
+        return 'success'
 
     def task_move(self, direction):
         move_pos(direction, self.position)
+        return 'success'
 
     def decide_task(self):
         if self.position[1] > 1:
@@ -116,15 +119,16 @@ class Thing(game_common.Thing):
         """
         try:
             self.task.check()
-        except GameError:
+        except GameError as e:
             self.task = None
+            self.last_task_result = e
             if is_AI:
                 self.decide_task()
             return
         self.task.todo -= 1
         if self.task.todo <= 0:
             task = getattr(self, 'task_' + self.task.name)
-            task(*self.task.args, **self.task.kwargs)
+            self.last_task_result = task(*self.task.args, **self.task.kwargs)
             self.task = None
         if is_AI and self.task is None:
             self.decide_task()
