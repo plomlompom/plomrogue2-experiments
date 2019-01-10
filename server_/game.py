@@ -159,10 +159,10 @@ class Commander():
 
     def cmd_ECHO(self, msg, connection_id):
         """Send msg to caller."""
-        self.send_to(connection_id, msg)
+        self.send(msg, connection_id)
     cmd_ECHO.argtypes = 'string'
 
     def cmd_ALL(self, msg, connection_id):
         """Send msg to all clients."""
-        self.send_all(msg)
+        self.send(msg)
     cmd_ALL.argtypes = 'string'

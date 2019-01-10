@@ -109,10 +109,17 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
     def handle_input(self, input_, connection_id=None, store=True):
         """Process input_ to command grammar, call command handler if found."""
         from inspect import signature
+
+        def answer(connection_id, msg):
+            if connection_id:
+                self.send(msg, connection_id)
+            else:
+                print(msg)
+
         try:
             command = self.parser.parse(input_)
             if command is None:
-                self.send_to(connection_id, 'UNHANDLED INPUT')
+                answer(connection_id, 'UNHANDLED INPUT')
             else:
                 if 'connection_id' in list(signature(command).parameters):
                     command(connection_id=connection_id)
@@ -122,25 +129,19 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
                         with open(self.game_file_name, 'a') as f:
                             f.write(input_ + '\n')
         except parser.ArgError as e:
-            self.send_to(connection_id, 'ARGUMENT ERROR: ' + str(e))
+            answer(connection_id, 'ARGUMENT ERROR: ' + str(e))
         except server_.game.GameError as e:
-            self.send_to(connection_id, 'GAME ERROR: ' + str(e))
+            answer(connection_id, 'GAME ERROR: ' + str(e))
 
-    def send_to(self, connection_id, msg):
-        """Send msg to client of connection_id; if no later, print instead."""
+    def send(self, msg, connection_id=None):
         if connection_id:
             self.queues_out[connection_id].put(msg)
         else:
-            print(msg)
-
-    def send_all(self, msg):
-        """Send msg to all clients."""
-        for connection_id in self.queues_out:
-            self.send_to(connection_id, msg)
+            for connection_id in self.queues_out:
+                self.queues_out[connection_id].put(msg)
 
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
-        from functools import partial
 
         def stringify_yx(tuple_):
             """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
@@ -157,19 +158,16 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
             quoted += ['"']
             return ''.join(quoted)
 
-        send=self.send_all
-        if connection_id:
-            send=partial(self.send_to, connection_id)
-        send('NEW_TURN ' + str(self.world.turn))
-        send('MAP_SIZE ' + stringify_yx(self.world.map_size))
+        self.send('NEW_TURN ' + str(self.world.turn))
+        self.send('MAP_SIZE ' + stringify_yx(self.world.map_size))
         for y in range(self.world.map_size[0]):
             width = self.world.map_size[1]
             terrain_line = self.world.terrain_map[y * width:(y + 1) * width]
-            send('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
+            self.send('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
         for thing in self.world.things:
-            send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            send('THING_POS %s %s' % (thing.id_,
-                                      stringify_yx(thing.position)))
+            self.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
+            self.send('THING_POS %s %s' % (thing.id_,
+                                           stringify_yx(thing.position)))
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
@@ -177,10 +175,10 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         First sends 'TURN_FINISHED' message, then runs game world
         until new player input is needed, then sends game state.
         """
-        self.send_all('TURN_FINISHED ' + str(self.world.turn))
+        self.send('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
         msg = str(self.world.get_player().last_task_result)
-        self.send_all('LAST_PLAYER_TASK_RESULT ' + msg)
+        self.send('LAST_PLAYER_TASK_RESULT ' + msg)
         self.send_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
@@ -189,10 +187,10 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         Numbers are calculated in parallel as far as possible, using fib().
         A 'CALCULATING …' message is sent to caller before the result.
         """
-        self.send_to(connection_id, 'CALCULATING …')
+        self.send('CALCULATING …', connection_id)
         results = self.pool.map(fib, numbers)
         reply = ' '.join([str(r) for r in results])
-        self.send_to(connection_id, reply)
+        self.send(reply, connection_id)
     cmd_FIB.argtypes = 'seq:int:nonneg'
 
     def cmd_INC_P(self, connection_id):
@@ -212,7 +210,7 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         from time import sleep
         if self.pool_result is not None:
             self.pool_result.wait()
-        self.send_all('TURN_FINISHED ' + str(self.world.turn))
+        self.send('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
         self.send_gamestate()
