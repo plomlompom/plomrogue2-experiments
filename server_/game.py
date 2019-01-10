@@ -79,6 +79,9 @@ class Task:
             map_tile = self.thing.world.terrain_map[pos_i]
             if map_tile != '.':
                 raise GameError('would move into illegal terrain')
+            for t in self.thing.world.things:
+                if t.position == test_pos:
+                    raise GameError('would move into other thing')
 
 
 class Thing(game_common.Thing):
