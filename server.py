@@ -138,8 +138,9 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         for connection_id in self.queues_out:
             self.send_to(connection_id, msg)
 
-    def send_all_gamestate(self):
+    def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
+        from functools import partial
 
         def stringify_yx(tuple_):
             """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
@@ -156,16 +157,19 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
             quoted += ['"']
             return ''.join(quoted)
 
-        self.send_all('NEW_TURN ' + str(self.world.turn))
-        self.send_all('MAP_SIZE ' + stringify_yx(self.world.map_size))
+        send=self.send_all
+        if connection_id:
+            send=partial(self.send_to, connection_id)
+        send('NEW_TURN ' + str(self.world.turn))
+        send('MAP_SIZE ' + stringify_yx(self.world.map_size))
         for y in range(self.world.map_size[0]):
             width = self.world.map_size[1]
             terrain_line = self.world.terrain_map[y * width:(y + 1) * width]
-            self.send_all('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
+            send('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
         for thing in self.world.things:
-            self.send_all('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.send_all('THING_POS %s %s' % (thing.id_,
-                                               stringify_yx(thing.position)))
+            send('THING_TYPE %s %s' % (thing.id_, thing.type_))
+            send('THING_POS %s %s' % (thing.id_,
+                                      stringify_yx(thing.position)))
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
@@ -177,7 +181,7 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         self.world.proceed_to_next_player_turn()
         msg = str(self.world.get_player().last_task_result)
         self.send_all('LAST_PLAYER_TASK_RESULT ' + msg)
-        self.send_all_gamestate()
+        self.send_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
         """Reply with n-th Fibonacci numbers, n taken from tokens[1:].
@@ -211,7 +215,7 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         self.send_all('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
-        self.send_all_gamestate()
+        self.send_gamestate()
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
 

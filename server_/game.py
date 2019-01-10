@@ -153,9 +153,9 @@ class Commander():
         self.world.get_player().set_task('wait')
         self.proceed()
 
-    def cmd_GET_TURN(self, connection_id):
-        """Send world.turn to caller."""
-        self.send_to(connection_id, str(self.world.turn))
+    def cmd_GET_GAMESTATE(self, connection_id):
+        """Send game state jto caller."""
+        self.send_gamestate(connection_id)
 
     def cmd_ECHO(self, msg, connection_id):
         """Send msg to caller."""
