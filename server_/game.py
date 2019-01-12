@@ -146,7 +146,7 @@ class Thing(game_common.Thing):
 
     def get_visible_map(self):
         size = self.world.map_.size
-        m = Map(size, '?'*size[0]*size[1])
+        m = Map(size, ' '*size[0]*size[1])
         y_me = self.position[0]
         x_me = self.position[1]
         for y in range(m.size[0]):
