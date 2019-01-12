@@ -1,31 +1,38 @@
 from parser import ArgError
 
 
-class World:
+class Map:
 
-    def __init__(self):
-        self.turn = 0
-        self.map_size = (0, 0)
-        self.terrain_map = ''
-        self.things = []
-        self.Thing = Thing  # child classes may use an extended Thing class here
+    def __init__(self, size=(0, 0), terrain=''):
+        self.size = size
+        self.terrain = terrain
 
-    def set_map_size(self, yx):
-        y, x = yx
-        self.map_size = (y, x)
-        self.terrain_map = ''
-        for y in range(self.map_size[0]):
-            self.terrain_map += '?' * self.map_size[1]
-
-    def set_map_line(self, y, line):
-        width_map = self.map_size[1]
-        if y >= self.map_size[0]:
+    def set_line(self, y, line):
+        height_map = self.size[0]
+        width_map = self.size[1]
+        if y >= height_map:
             raise ArgError('too large row number %s' % y)
         width_line = len(line)
         if width_line > width_map:
             raise ArgError('too large map line width %s' % width_line)
-        self.terrain_map = self.terrain_map[:y * width_map] + line + \
-                           self.terrain_map[(y + 1) * width_map:]
+        self.terrain = self.terrain[:y * width_map] + line +\
+                       self.terrain[(y + 1) * width_map:]
+
+    def set_size(self, yx):
+        y, x = yx
+        self.size = (y, x)
+        self.terrain = ''
+        for y in range(self.size[0]):
+            self.terrain += '?' * self.size[1]
+
+
+class World:
+
+    def __init__(self):
+        self.turn = 0
+        self.map_ = Map()
+        self.things = []
+        self.Thing = Thing  # child classes may use an extended Thing class here
 
     def get_thing(self, id_):
         for thing in self.things:
@@ -49,12 +56,8 @@ class Commander:
 
     def cmd_MAP_SIZE(self, yx):
         """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
-        self.world.set_map_size(yx)
+        self.world.map_.set_size(yx)
     cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
-
-    def cmd_TERRAIN_LINE(self, y, terrain_line):
-        self.world.set_map_line(y, terrain_line)
-    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
     def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)

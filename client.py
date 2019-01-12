@@ -34,6 +34,10 @@ class Game(Commander):
         self.world.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
+    def cmd_VISIBLE_MAP_LINE(self, y, terrain_line):
+        self.world.map_.set_line(y, terrain_line)
+    cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
+
 
 class WidgetManager:
 
@@ -50,13 +54,13 @@ class WidgetManager:
         self.top = urwid.Filler(widget_pile, valign='top')
 
     def draw_map(self):
-        """Draw map view from .game.terrain_map, .game.things."""
+        """Draw map view from .game.map_.terrain, .game.things."""
         map_lines = []
-        map_size = len(self.game.world.terrain_map)
+        map_size = len(self.game.world.map_.terrain)
         start_cut = 0
         while start_cut < map_size:
-            limit = start_cut + self.game.world.map_size[1]
-            map_lines += [self.game.world.terrain_map[start_cut:limit]]
+            limit = start_cut + self.game.world.map_.size[1]
+            map_lines += [self.game.world.map_.terrain[start_cut:limit]]
             start_cut = limit
         for t in self.game.world.things:
             line_as_list = list(map_lines[t.position[0]])

@@ -159,11 +159,10 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
             return ''.join(quoted)
 
         self.send('NEW_TURN ' + str(self.world.turn))
-        self.send('MAP_SIZE ' + stringify_yx(self.world.map_size))
-        for y in range(self.world.map_size[0]):
-            width = self.world.map_size[1]
-            terrain_line = self.world.terrain_map[y * width:(y + 1) * width]
-            self.send('TERRAIN_LINE %5s %s' % (y, quoted(terrain_line)))
+        self.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
+        visible_map = self.world.get_player().get_visible_map()
+        for y in range(self.world.map_.size[0]):
+            self.send('VISIBLE_MAP_LINE %5s %s' % (y, visible_map.get_line(y)))
         for thing in self.world.things:
             self.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.send('THING_POS %s %s' % (thing.id_,

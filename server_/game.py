@@ -19,11 +19,19 @@ def move_pos(direction, pos_yx):
         pos_yx[1] -= 1
 
 
+class Map(game_common.Map):
+
+    def get_line(self, y):
+        width = self.size[1]
+        return self.terrain[y * width:(y + 1) * width]
+
+
 class World(game_common.World):
 
     def __init__(self):
         super().__init__()
         self.Thing = Thing  # use local Thing class instead of game_common's
+        self.map_ = Map()  # use extended child class
         self.player_id = 0
 
     def proceed_to_next_player_turn(self):
@@ -72,11 +80,11 @@ class Task:
             test_pos = self.thing.position[:]
             move_pos(direction, test_pos)
             if test_pos[0] < 0 or test_pos[1] < 0 or \
-               test_pos[0] >= self.thing.world.map_size[0] or \
-               test_pos[1] >= self.thing.world.map_size[1]:
+               test_pos[0] >= self.thing.world.map_.size[0] or \
+               test_pos[1] >= self.thing.world.map_.size[1]:
                 raise GameError('would move outside map bounds')
-            pos_i = test_pos[0] * self.thing.world.map_size[1] + test_pos[1]
-            map_tile = self.thing.world.terrain_map[pos_i]
+            pos_i = test_pos[0] * self.thing.world.map_.size[1] + test_pos[1]
+            map_tile = self.thing.world.map_.terrain[pos_i]
             if map_tile != '.':
                 raise GameError('would move into illegal terrain')
             for t in self.thing.world.things:
@@ -136,6 +144,9 @@ class Thing(game_common.Thing):
         if is_AI and self.task is None:
             self.decide_task()
 
+    def get_visible_map(self):
+        return Map(self.world.map_.size, self.world.map_.terrain)
+
 
 class Commander():
 
@@ -166,3 +177,7 @@ class Commander():
         """Send msg to all clients."""
         self.send(msg)
     cmd_ALL.argtypes = 'string'
+
+    def cmd_TERRAIN_LINE(self, y, terrain_line):
+        self.world.map_.set_line(y, terrain_line)
+    cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
