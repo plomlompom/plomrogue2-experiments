@@ -145,7 +145,18 @@ class Thing(game_common.Thing):
             self.decide_task()
 
     def get_visible_map(self):
-        return Map(self.world.map_.size, self.world.map_.terrain)
+        size = self.world.map_.size
+        m = Map(size, '?'*size[0]*size[1])
+        y_me = self.position[0]
+        x_me = self.position[1]
+        for y in range(m.size[0]):
+            if y in (y_me - 1, y_me, y_me + 1):
+                for x in range(m.size[1]):
+                    if x in (x_me - 1, x_me, x_me + 1):
+                        pos = y * size[1] + x
+                        c = self.world.map_.terrain[pos]
+                        m.terrain = m.terrain[:pos] + c + m.terrain[pos+1:]
+        return m
 
 
 class Commander():
