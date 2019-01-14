@@ -23,6 +23,11 @@ class Game(Commander):
             symbol = 'm'
         return symbol
 
+    def cmd_LAST_PLAYER_TASK_RESULT(self, msg):
+        if msg != "success":
+            self.log_text = msg + '\n' + self.log_text
+    cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
+
     def cmd_TURN_FINISHED(self, n):
         """Do nothing. (This may be extended later.)"""
         pass

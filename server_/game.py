@@ -179,7 +179,6 @@ class Thing(game_common.Thing):
         stencil = self.get_stencil()
         visible_things = []
         for thing in self.world.things:
-            print('DEBUG .....')
             width = self.world.map_.size[1]
             pos_i = thing.position[0] * width + thing.position[1]
             if stencil.terrain[pos_i] == '.':

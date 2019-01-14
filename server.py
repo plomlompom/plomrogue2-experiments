@@ -133,6 +133,17 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         except server_.game.GameError as e:
             answer(connection_id, 'GAME ERROR: ' + str(e))
 
+    def quote(self, string):
+        """Quote & escape string so client interprets it as single token."""
+        quoted = []
+        quoted += ['"']
+        for c in string:
+            if c in {'"', '\\'}:
+                quoted += ['\\']
+            quoted += [c]
+        quoted += ['"']
+        return ''.join(quoted)
+
     def send(self, msg, connection_id=None):
         if connection_id:
             self.queues_out[connection_id].put(msg)
@@ -147,22 +158,12 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
             """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
             return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
-        def quoted(string):
-            """Quote & escape string so client interprets it as single token."""
-            quoted = []
-            quoted += ['"']
-            for c in string:
-                if c in {'"', '\\'}:
-                    quoted += ['\\']
-                quoted += [c]
-            quoted += ['"']
-            return ''.join(quoted)
-
         self.send('NEW_TURN ' + str(self.world.turn))
         self.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y in range(self.world.map_.size[0]):
-            self.send('VISIBLE_MAP_LINE %5s "%s"' % (y, visible_map.get_line(y)))
+            self.send('VISIBLE_MAP_LINE %5s %s' %
+                      (y, self.quote(visible_map.get_line(y))))
         visible_things = self.world.get_player().get_visible_things()
         for thing in visible_things:
             self.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
@@ -178,7 +179,7 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         self.send('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
         msg = str(self.world.get_player().last_task_result)
-        self.send('LAST_PLAYER_TASK_RESULT ' + msg)
+        self.send('LAST_PLAYER_TASK_RESULT ' + self.quote(msg))
         self.send_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
