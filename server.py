@@ -163,7 +163,8 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         visible_map = self.world.get_player().get_visible_map()
         for y in range(self.world.map_.size[0]):
             self.send('VISIBLE_MAP_LINE %5s "%s"' % (y, visible_map.get_line(y)))
-        for thing in self.world.things:
+        visible_things = self.world.get_player().get_visible_things()
+        for thing in visible_things:
             self.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.send('THING_POS %s %s' % (thing.id_,
                                            stringify_yx(thing.position)))

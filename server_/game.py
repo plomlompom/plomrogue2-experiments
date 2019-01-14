@@ -98,6 +98,7 @@ class Thing(game_common.Thing):
         super().__init__(*args, **kwargs)
         self.task = Task(self, 'wait')
         self.last_task_result = None
+        self._stencil = None
 
     def task_wait(self):
         return 'success'
@@ -121,13 +122,16 @@ class Thing(game_common.Thing):
     def proceed(self, is_AI=True):
         """Further the thing in its tasks.
 
-        Decrements .task.todo; if it thus falls to <= 0, enacts method whose
-        name is 'task_' + self.task.name and sets .task = None. If is_AI, calls
-        .decide_task to decide a self.task.
+        Decrements .task.todo; if it thus falls to <= 0, enacts method
+        whose name is 'task_' + self.task.name and sets .task =
+        None. If is_AI, calls .decide_task to decide a self.task.
 
-        Before doing anything, checks that task is still possible, and aborts
-        it otherwise (for AI things, decides a new task).
+        Before doing anything, ensures an empty map visibility stencil
+        and checks that task is still possible, and aborts it
+        otherwise (for AI things, decides a new task).
+
         """
+        self._stencil = None
         try:
             self.task.check()
         except GameError as e:
@@ -144,9 +148,11 @@ class Thing(game_common.Thing):
         if is_AI and self.task is None:
             self.decide_task()
 
-    def get_visible_map(self):
+    def get_stencil(self):
+        if self._stencil is not None:
+            return self._stencil
         size = self.world.map_.size
-        m = Map(size, ' '*size[0]*size[1])
+        m = Map(self.world.map_.size, '?'*size[0]*size[1])
         y_me = self.position[0]
         x_me = self.position[1]
         for y in range(m.size[0]):
@@ -154,9 +160,31 @@ class Thing(game_common.Thing):
                 for x in range(m.size[1]):
                     if x in (x_me - 1, x_me, x_me + 1):
                         pos = y * size[1] + x
-                        c = self.world.map_.terrain[pos]
-                        m.terrain = m.terrain[:pos] + c + m.terrain[pos+1:]
+                        m.terrain = m.terrain[:pos] + '.' + m.terrain[pos+1:]
+        self._stencil = m
+        return self._stencil
+
+    def get_visible_map(self):
+        stencil = self.get_stencil()
+        size = self.world.map_.size
+        size_i = self.world.map_.size[0] * self.world.map_.size[1]
+        m = Map(size, ' '*size_i)
+        for i in range(size_i):
+            if stencil.terrain[i] == '.':
+                c = self.world.map_.terrain[i]
+                m.terrain = m.terrain[:i] + c + m.terrain[i+1:]
         return m
+
+    def get_visible_things(self):
+        stencil = self.get_stencil()
+        visible_things = []
+        for thing in self.world.things:
+            print('DEBUG .....')
+            width = self.world.map_.size[1]
+            pos_i = thing.position[0] * width + thing.position[1]
+            if stencil.terrain[pos_i] == '.':
+                visible_things += [thing]
+        return visible_things
 
 
 class Commander():
