@@ -106,6 +106,17 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         self.pool = Pool()
         self.pool_result = None
 
+    def quote(self, string):
+        """Quote & escape string so client interprets it as single token."""
+        quoted = []
+        quoted += ['"']
+        for c in string:
+            if c in {'"', '\\'}:
+                quoted += ['\\']
+            quoted += [c]
+        quoted += ['"']
+        return ''.join(quoted)
+
     def handle_input(self, input_, connection_id=None, store=True):
         """Process input_ to command grammar, call command handler if found."""
         from inspect import signature
@@ -119,7 +130,7 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
         try:
             command = self.parser.parse(input_)
             if command is None:
-                answer(connection_id, 'UNHANDLED INPUT')
+                answer(connection_id, 'UNHANDLED_INPUT')
             else:
                 if 'connection_id' in list(signature(command).parameters):
                     command(connection_id=connection_id)
@@ -129,20 +140,9 @@ class CommandHandler(game_common.Commander, server_.game.Commander):
                         with open(self.game_file_name, 'a') as f:
                             f.write(input_ + '\n')
         except parser.ArgError as e:
-            answer(connection_id, 'ARGUMENT ERROR: ' + str(e))
+            answer(connection_id, 'ARGUMENT_ERROR ' + self.quote(str(e)))
         except server_.game.GameError as e:
-            answer(connection_id, 'GAME ERROR: ' + str(e))
-
-    def quote(self, string):
-        """Quote & escape string so client interprets it as single token."""
-        quoted = []
-        quoted += ['"']
-        for c in string:
-            if c in {'"', '\\'}:
-                quoted += ['\\']
-            quoted += [c]
-        quoted += ['"']
-        return ''.join(quoted)
+            answer(connection_id, 'GAME_ERROR ' + self.quote(str(e)))
 
     def send(self, msg, connection_id=None):
         if connection_id:
