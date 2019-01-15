@@ -10,15 +10,11 @@ import parser
 socketserver.TCPServer.allow_reuse_address = True
 
 
-# Our default server port.
-SERVER_PORT=5000
-
-
 class Server(socketserver.ThreadingTCPServer):
     """Bind together threaded IO handling server and message queue."""
 
-    def __init__(self, queue, *args, **kwargs):
-        super().__init__(('localhost', SERVER_PORT), IO_Handler, *args, **kwargs)
+    def __init__(self, queue, port, *args, **kwargs):
+        super().__init__(('localhost', port), IO_Handler, *args, **kwargs)
         self.queue_out = queue
         self.daemon_threads = True  # Else, server's threads have daemon=False.
 
@@ -126,6 +122,31 @@ class GameIO():
             elif command_type == 'COMMAND':
                 self.handle_input(content, connection_id)
 
+    def run_loop_with_server(self):
+        """Run connection of server talking to clients and game IO loop.
+
+        We have the TCP server (an instance of Server) and we have the
+        game IO loop, a thread running self.loop. Both communicate with
+        each other via a queue.Queue. While the TCP server may spawn
+        parallel threads to many clients, the IO loop works sequentially
+        through game commands received from the TCP server's threads (=
+        client connections to the TCP server). A processed command may
+        trigger messages to the commanding client or to all clients,
+        delivered from the IO loop to the TCP server via the queue.
+
+        """
+        q = queue.Queue()
+        c = threading.Thread(target=self.loop, daemon=True, args=(q,))
+        c.start()
+        server = Server(q, 5000)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            print('Killing server')
+            server.server_close()
+
     def handle_input(self, input_, connection_id=None, store=True):
         """Process input_ to command grammar, call command handler if found."""
         from inspect import signature
@@ -179,29 +200,3 @@ class GameIO():
             quoted += [c]
         quoted += ['"']
         return ''.join(quoted)
-
-
-def run_server_with_io_loop(game):
-    """Run connection of server talking to clients and game IO loop.
-
-    We have the TCP server (an instance of Server) and we have the
-    game IO loop, a thread running Game.io.loop. Both communicate with
-    each other via a queue.Queue. While the TCP server may spawn
-    parallel threads to many clients, the IO loop works sequentially
-    through game commands received from the TCP server's threads (=
-    client connections to the TCP server). A processed command may
-    trigger messages to the commanding client or to all clients,
-    delivered from the IO loop to the TCP server via the queue.
-
-    """
-    q = queue.Queue()
-    c = threading.Thread(target=game.io.loop, daemon=True, args=(q,))
-    c.start()
-    server = Server(q)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        print('Killing server')
-        server.server_close()

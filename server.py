@@ -2,7 +2,6 @@
 import sys
 import os
 import server_.game
-import server_.io
 
 
 if len(sys.argv) != 2:
@@ -31,6 +30,4 @@ else:
     game.io.handle_input('THING_POS 0 Y:3,X:3')
     game.io.handle_input('THING_TYPE 1 monster')
     game.io.handle_input('THING_POS 1 Y:1,X:1')
-
-
-server_.io.run_server_with_io_loop(game)
+game.io.run_loop_with_server()
