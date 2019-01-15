@@ -1,7 +1,6 @@
 import sys
 sys.path.append('../')
 import game_common
-import parser
 
 
 class GameError(Exception):
@@ -194,70 +193,17 @@ def fib(n):
         return fib(n-1) + fib(n-2)
 
 
-class CommandHandler(game_common.Commander):
+class Game(game_common.Commander):
 
     def __init__(self, game_file_name):
-        self.queues_out = {}
+        import server_.io
         self.world = World()
-        self.parser = parser.Parser(self)
-        self.game_file_name = game_file_name
+        self.io = server_.io.GameIO(game_file_name, self)
         # self.pool and self.pool_result are currently only needed by the FIB
         # command and the demo of a parallelized game loop in cmd_inc_p.
         from multiprocessing import Pool
         self.pool = Pool()
         self.pool_result = None
-
-    def send(self, msg, connection_id=None):
-        """Send message msg to server's client(s) via self.queues_out.
-
-        If a specific client is identified by connection_id, only
-        sends msg to that one. Else, sends it to all clients
-        identified in self.queues_out.
-
-        """
-        if connection_id:
-            self.queues_out[connection_id].put(msg)
-        else:
-            for connection_id in self.queues_out:
-                self.queues_out[connection_id].put(msg)
-
-    def handle_input(self, input_, connection_id=None, store=True):
-        """Process input_ to command grammar, call command handler if found."""
-        from inspect import signature
-
-        def answer(connection_id, msg):
-            if connection_id:
-                self.send(msg, connection_id)
-            else:
-                print(msg)
-
-        try:
-            command = self.parser.parse(input_)
-            if command is None:
-                answer(connection_id, 'UNHANDLED_INPUT')
-            else:
-                if 'connection_id' in list(signature(command).parameters):
-                    command(connection_id=connection_id)
-                else:
-                    command()
-                    if store:
-                        with open(self.game_file_name, 'a') as f:
-                            f.write(input_ + '\n')
-        except parser.ArgError as e:
-            answer(connection_id, 'ARGUMENT_ERROR ' + self.quote(str(e)))
-        except game.GameError as e:
-            answer(connection_id, 'GAME_ERROR ' + self.quote(str(e)))
-
-    def quote(self, string):
-        """Quote & escape string so client interprets it as single token."""
-        quoted = []
-        quoted += ['"']
-        for c in string:
-            if c in {'"', '\\'}:
-                quoted += ['\\']
-            quoted += [c]
-        quoted += ['"']
-        return ''.join(quoted)
 
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
@@ -266,17 +212,17 @@ class CommandHandler(game_common.Commander):
             """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
             return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
-        self.send('NEW_TURN ' + str(self.world.turn))
-        self.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
+        self.io.send('NEW_TURN ' + str(self.world.turn))
+        self.io.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y in range(self.world.map_.size[0]):
-            self.send('VISIBLE_MAP_LINE %5s %s' %
-                      (y, self.quote(visible_map.get_line(y))))
+            self.io.send('VISIBLE_MAP_LINE %5s %s' %
+                         (y, self.io.quote(visible_map.get_line(y))))
         visible_things = self.world.get_player().get_visible_things()
         for thing in visible_things:
-            self.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.send('THING_POS %s %s' % (thing.id_,
-                                           stringify_yx(thing.position)))
+            self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
+            self.io.send('THING_POS %s %s' % (thing.id_,
+                                              stringify_yx(thing.position)))
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
@@ -284,10 +230,10 @@ class CommandHandler(game_common.Commander):
         First sends 'TURN_FINISHED' message, then runs game world
         until new player input is needed, then sends game state.
         """
-        self.send('TURN_FINISHED ' + str(self.world.turn))
+        self.io.send('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
         msg = str(self.world.get_player().last_task_result)
-        self.send('LAST_PLAYER_TASK_RESULT ' + self.quote(msg))
+        self.io.send('LAST_PLAYER_TASK_RESULT ' + self.io.quote(msg))
         self.send_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
@@ -296,10 +242,10 @@ class CommandHandler(game_common.Commander):
         Numbers are calculated in parallel as far as possible, using fib().
         A 'CALCULATING …' message is sent to caller before the result.
         """
-        self.send('CALCULATING …', connection_id)
+        self.io.send('CALCULATING …', connection_id)
         results = self.pool.map(fib, numbers)
         reply = ' '.join([str(r) for r in results])
-        self.send(reply, connection_id)
+        self.io.send(reply, connection_id)
     cmd_FIB.argtypes = 'seq:int:nonneg'
 
     def cmd_INC_P(self, connection_id):
@@ -319,7 +265,7 @@ class CommandHandler(game_common.Commander):
         from time import sleep
         if self.pool_result is not None:
             self.pool_result.wait()
-        self.send('TURN_FINISHED ' + str(self.world.turn))
+        self.io.send('TURN_FINISHED ' + str(self.world.turn))
         sleep(1)
         self.world.turn += 1
         self.send_gamestate()
@@ -327,6 +273,7 @@ class CommandHandler(game_common.Commander):
 
     def cmd_MOVE(self, direction):
         """Set player task to 'move' with direction arg, finish player turn."""
+        import parser
         if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
             raise parser.ArgError('Move argument must be one of: '
                                   'UP, DOWN, RIGHT, LEFT')
@@ -345,12 +292,12 @@ class CommandHandler(game_common.Commander):
 
     def cmd_ECHO(self, msg, connection_id):
         """Send msg to caller."""
-        self.send(msg, connection_id)
+        self.io.send(msg, connection_id)
     cmd_ECHO.argtypes = 'string'
 
     def cmd_ALL(self, msg, connection_id):
         """Send msg to all clients."""
-        self.send(msg)
+        self.io.send(msg)
     cmd_ALL.argtypes = 'string'
 
     def cmd_TERRAIN_LINE(self, y, terrain_line):
