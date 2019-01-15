@@ -207,16 +207,19 @@ class CommandHandler(game_common.Commander):
         self.pool = Pool()
         self.pool_result = None
 
-    def quote(self, string):
-        """Quote & escape string so client interprets it as single token."""
-        quoted = []
-        quoted += ['"']
-        for c in string:
-            if c in {'"', '\\'}:
-                quoted += ['\\']
-            quoted += [c]
-        quoted += ['"']
-        return ''.join(quoted)
+    def send(self, msg, connection_id=None):
+        """Send message msg to server's client(s) via self.queues_out.
+
+        If a specific client is identified by connection_id, only
+        sends msg to that one. Else, sends it to all clients
+        identified in self.queues_out.
+
+        """
+        if connection_id:
+            self.queues_out[connection_id].put(msg)
+        else:
+            for connection_id in self.queues_out:
+                self.queues_out[connection_id].put(msg)
 
     def handle_input(self, input_, connection_id=None, store=True):
         """Process input_ to command grammar, call command handler if found."""
@@ -245,19 +248,16 @@ class CommandHandler(game_common.Commander):
         except game.GameError as e:
             answer(connection_id, 'GAME_ERROR ' + self.quote(str(e)))
 
-    def send(self, msg, connection_id=None):
-        """Send message msg to server's client(s) via self.queues_out.
-
-        If a specific client is identified by connection_id, only
-        sends msg to that one. Else, sends it to all clients
-        identified in self.queues_out.
-
-        """
-        if connection_id:
-            self.queues_out[connection_id].put(msg)
-        else:
-            for connection_id in self.queues_out:
-                self.queues_out[connection_id].put(msg)
+    def quote(self, string):
+        """Quote & escape string so client interprets it as single token."""
+        quoted = []
+        quoted += ['"']
+        for c in string:
+            if c in {'"', '\\'}:
+                quoted += ['\\']
+            quoted += [c]
+        quoted += ['"']
+        return ''.join(quoted)
 
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
@@ -324,6 +324,7 @@ class CommandHandler(game_common.Commander):
         self.world.turn += 1
         self.send_gamestate()
         self.pool_result = self.pool.map_async(fib, (35, 35))
+
     def cmd_MOVE(self, direction):
         """Set player task to 'move' with direction arg, finish player turn."""
         if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:

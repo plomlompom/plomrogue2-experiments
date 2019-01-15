@@ -111,10 +111,10 @@ def io_loop(q, game_command_handler):
         content = None if len(x) == 2 else x[2]
         if command_type == 'ADD_QUEUE':
             game_command_handler.queues_out[connection_id] = content
-        elif command_type == 'COMMAND':
-            game_command_handler.handle_input(content, connection_id)
         elif command_type == 'KILL_QUEUE':
             del game_command_handler.queues_out[connection_id]
+        elif command_type == 'COMMAND':
+            game_command_handler.handle_input(content, connection_id)
 
 
 def run_server_with_io_loop(command_handler):
