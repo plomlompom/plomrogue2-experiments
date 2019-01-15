@@ -31,9 +31,10 @@ class IO_Handler(socketserver.BaseRequestHandler):
         from the game IO loop via that new queue.
 
         At the same time, loops over socket's recv to get messages
-        from the outside via self.server.queue_out into the game IO
-        loop. Ends connection once a 'QUIT' message is received from
-        socket, and then also calls for a kill of its own queue.
+        from the outside into the game IO loop by way of
+        self.server.queue_out into the game IO. Ends connection once a
+        'QUIT' message is received from socket, and then also calls
+        for a kill of its own queue.
 
         All messages to the game IO loop are tuples, with the first
         element a meta command ('ADD_QUEUE' for queue creation,
