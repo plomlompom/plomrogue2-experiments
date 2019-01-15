@@ -186,7 +186,7 @@ class Thing(game_common.Thing):
         return visible_things
 
 
-class Commander():
+class Commander(game_common.Commander):
 
     def cmd_MOVE(self, direction):
         """Set player task to 'move' with direction arg, finish player turn."""
