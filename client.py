@@ -4,10 +4,10 @@ import plom_socket_io
 import socket
 import threading
 from parser import ArgError, Parser
-from game_common import World, Commander
+from game_common import World, CommonCommandsMixin
 
 
-class Game(Commander):
+class Game(CommonCommandsMixin):
     world = World()
     log_text = ''
 

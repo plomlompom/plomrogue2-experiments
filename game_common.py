@@ -52,7 +52,7 @@ class Thing:
         self.position = [0,0]
 
 
-class Commander:
+class CommonCommandsMixin:
 
     def cmd_MAP_SIZE(self, yx):
         """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""

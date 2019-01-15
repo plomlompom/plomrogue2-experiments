@@ -193,7 +193,7 @@ def fib(n):
         return fib(n-1) + fib(n-2)
 
 
-class Game(game_common.Commander):
+class Game(game_common.CommonCommandsMixin):
 
     def __init__(self, game_file_name):
         import server_.io
