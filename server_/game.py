@@ -7,22 +7,63 @@ class GameError(Exception):
     pass
 
 
-def move_pos(direction, pos_yx):
-    if direction == 'UP':
-        pos_yx[0] -= 1
-    elif direction == 'DOWN':
-        pos_yx[0] += 1
-    elif direction == 'RIGHT':
-        pos_yx[1] += 1
-    elif direction == 'LEFT':
-        pos_yx[1] -= 1
-
-
 class Map(game_common.Map):
+
+    @property
+    def size_i(self):
+        return self.size[0] * self.size[1]
 
     def get_line(self, y):
         width = self.size[1]
         return self.terrain[y * width:(y + 1) * width]
+
+    def get_directions(self):
+        directions = []
+        for name in dir(self):
+            if name[:5] == 'move_':
+                directions += [name[5:]]
+        return directions
+
+    def get_pos_i(self, yx):
+        return yx[0] * self.size[1] + yx[1]
+
+    def set_terrain_at(self, pos, c):
+        pos_i = self.get_pos_i(pos)
+        self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
+
+    def get_terrain_at(self, yx):
+        return self.terrain[self.get_pos_i(yx)]
+
+    def new_from_shape(self, init_char):
+        return Map(self.size, init_char*self.size_i)
+
+    def iterate(self):
+        for y in range(self.size[0]):
+            for x in range(self.size[1]):
+                yield [y, x]
+
+    def are_neighbors(self, pos_1, pos_2):
+        return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
+
+    def move(self, start_pos, direction):
+        mover = getattr(self, 'move_' + direction)
+        new_pos = mover(start_pos)
+        if new_pos[0] < 0 or new_pos[1] < 0 or \
+                new_pos[0] >= self.size[0] or new_pos[1] >= self.size[1]:
+            raise GameError('would move outside map bounds')
+        return new_pos
+
+    def move_UP(self, start_pos):
+        return [start_pos[0] - 1, start_pos[1]]
+
+    def move_DOWN(self, start_pos):
+        return [start_pos[0] + 1, start_pos[1]]
+
+    def move_LEFT(self, start_pos):
+        return [start_pos[0], start_pos[1] - 1]
+
+    def move_RIGHT(self, start_pos):
+        return [start_pos[0], start_pos[1] + 1]
 
 
 class World(game_common.World):
@@ -76,14 +117,9 @@ class Task:
                 direction = self.args[0]
             else:
                 direction = self.kwargs['direction']
-            test_pos = self.thing.position[:]
-            move_pos(direction, test_pos)
-            if test_pos[0] < 0 or test_pos[1] < 0 or \
-               test_pos[0] >= self.thing.world.map_.size[0] or \
-               test_pos[1] >= self.thing.world.map_.size[1]:
-                raise GameError('would move outside map bounds')
-            pos_i = test_pos[0] * self.thing.world.map_.size[1] + test_pos[1]
-            map_tile = self.thing.world.map_.terrain[pos_i]
+            test_pos = self.thing.world.map_.move(self.thing.position,
+                                                  direction)
+            map_tile = self.thing.world.map_.get_terrain_at(test_pos)
             if map_tile != '.':
                 raise GameError('would move into illegal terrain')
             for t in self.thing.world.things:
@@ -103,7 +139,7 @@ class Thing(game_common.Thing):
         return 'success'
 
     def task_move(self, direction):
-        move_pos(direction, self.position)
+        self.position = self.world.map_.move(self.position, direction)
         return 'success'
 
     def decide_task(self):
@@ -150,37 +186,26 @@ class Thing(game_common.Thing):
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        size = self.world.map_.size
-        m = Map(self.world.map_.size, '?'*size[0]*size[1])
-        y_me = self.position[0]
-        x_me = self.position[1]
-        for y in range(m.size[0]):
-            if y in (y_me - 1, y_me, y_me + 1):
-                for x in range(m.size[1]):
-                    if x in (x_me - 1, x_me, x_me + 1):
-                        pos = y * size[1] + x
-                        m.terrain = m.terrain[:pos] + '.' + m.terrain[pos+1:]
+        m = self.world.map_.new_from_shape('?')
+        for pos in m.iterate():
+            if pos == self.position or m.are_neighbors(pos, self.position):
+                m.set_terrain_at(pos, '.')
         self._stencil = m
         return self._stencil
 
     def get_visible_map(self):
         stencil = self.get_stencil()
-        size = self.world.map_.size
-        size_i = self.world.map_.size[0] * self.world.map_.size[1]
-        m = Map(size, ' '*size_i)
-        for i in range(size_i):
-            if stencil.terrain[i] == '.':
-                c = self.world.map_.terrain[i]
-                m.terrain = m.terrain[:i] + c + m.terrain[i+1:]
+        m = self.world.map_.new_from_shape(' ')
+        for pos in m.iterate():
+            if stencil.get_terrain_at(pos) == '.':
+                m.set_terrain_at(pos, self.world.map_.get_terrain_at(pos))
         return m
 
     def get_visible_things(self):
         stencil = self.get_stencil()
         visible_things = []
         for thing in self.world.things:
-            width = self.world.map_.size[1]
-            pos_i = thing.position[0] * width + thing.position[1]
-            if stencil.terrain[pos_i] == '.':
+            if stencil.get_terrain_at(thing.position) == '.':
                 visible_things += [thing]
         return visible_things
 
@@ -274,9 +299,10 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_MOVE(self, direction):
         """Set player task to 'move' with direction arg, finish player turn."""
         import parser
-        if direction not in {'UP', 'DOWN', 'RIGHT', 'LEFT'}:
-            raise parser.ArgError('Move argument must be one of: '
-                                  'UP, DOWN, RIGHT, LEFT')
+        legal_directions = self.world.map_.get_directions()
+        if direction not in legal_directions:
+            raise parser.ArgError('Move argument must be one of: ' +
+                                  ', '.join(legal_directions))
         self.world.get_player().set_task('move', direction=direction)
         self.proceed()
     cmd_MOVE.argtypes = 'string'
