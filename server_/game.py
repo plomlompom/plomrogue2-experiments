@@ -9,6 +9,13 @@ class GameError(Exception):
 
 class Map(game_common.Map):
 
+    def __getitem__(self, yx):
+        return self.terrain[self.get_pos_i(yx)]
+
+    def __setitem__(self, yx, c):
+        pos_i = self.get_pos_i(yx)
+        self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
+
     @property
     def size_i(self):
         return self.size[0] * self.size[1]
@@ -26,13 +33,6 @@ class Map(game_common.Map):
 
     def get_pos_i(self, yx):
         return yx[0] * self.size[1] + yx[1]
-
-    def set_terrain_at(self, pos, c):
-        pos_i = self.get_pos_i(pos)
-        self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
-
-    def get_terrain_at(self, yx):
-        return self.terrain[self.get_pos_i(yx)]
 
     def new_from_shape(self, init_char):
         return Map(self.size, init_char*self.size_i)
@@ -119,7 +119,7 @@ class Task:
                 direction = self.kwargs['direction']
             test_pos = self.thing.world.map_.move(self.thing.position,
                                                   direction)
-            map_tile = self.thing.world.map_.get_terrain_at(test_pos)
+            map_tile = self.thing.world.map_[test_pos]
             if map_tile != '.':
                 raise GameError('would move into illegal terrain')
             for t in self.thing.world.things:
@@ -189,7 +189,7 @@ class Thing(game_common.Thing):
         m = self.world.map_.new_from_shape('?')
         for pos in m.iterate():
             if pos == self.position or m.are_neighbors(pos, self.position):
-                m.set_terrain_at(pos, '.')
+                m[pos] = '.'
         self._stencil = m
         return self._stencil
 
@@ -197,15 +197,15 @@ class Thing(game_common.Thing):
         stencil = self.get_stencil()
         m = self.world.map_.new_from_shape(' ')
         for pos in m.iterate():
-            if stencil.get_terrain_at(pos) == '.':
-                m.set_terrain_at(pos, self.world.map_.get_terrain_at(pos))
+            if stencil[pos] == '.':
+                m[pos] = self.world.map_[pos]
         return m
 
     def get_visible_things(self):
         stencil = self.get_stencil()
         visible_things = []
         for thing in self.world.things:
-            if stencil.get_terrain_at(thing.position) == '.':
+            if stencil[thing.position] == '.':
                 visible_things += [thing]
         return visible_things
 
