@@ -10,24 +10,32 @@ class GameError(Exception):
 class Map(game_common.Map):
 
     def __getitem__(self, yx):
-        return self.terrain[self.get_pos_i(yx)]
+        return self.terrain[self.get_position_index(yx)]
 
     def __setitem__(self, yx, c):
-        pos_i = self.get_pos_i(yx)
+        pos_i = self.get_position_index(yx)
         self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
 
     def __iter__(self):
+        """Iterate over YX position coordinates."""
         for y in range(self.size[0]):
             for x in range(self.size[1]):
                 yield [y, x]
 
+    def lines(self):
+        width = self.size[1]
+        for y in range(self.size[0]):
+            yield (y, self.terrain[y * width:(y + 1) * width])
+
+    # The following is used nowhere, so not implemented.
+    #def items(self):
+    #    for y in range(self.size[0]):
+    #        for x in range(self.size[1]):
+    #            yield ([y, x], self.terrain[self.get_position_index([y, x])])
+
     @property
     def size_i(self):
         return self.size[0] * self.size[1]
-
-    def get_line(self, y):
-        width = self.size[1]
-        return self.terrain[y * width:(y + 1) * width]
 
     def get_directions(self):
         directions = []
@@ -36,7 +44,7 @@ class Map(game_common.Map):
                 directions += [name[5:]]
         return directions
 
-    def get_pos_i(self, yx):
+    def get_position_index(self, yx):
         return yx[0] * self.size[1] + yx[1]
 
     def new_from_shape(self, init_char):
@@ -238,9 +246,8 @@ class Game(game_common.CommonCommandsMixin):
         self.io.send('NEW_TURN ' + str(self.world.turn))
         self.io.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
-        for y in range(self.world.map_.size[0]):
-            self.io.send('VISIBLE_MAP_LINE %5s %s' %
-                         (y, self.io.quote(visible_map.get_line(y))))
+        for y, line in visible_map.lines():
+            self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, self.io.quote(line)))
         visible_things = self.world.get_player().get_visible_things()
         for thing in visible_things:
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
