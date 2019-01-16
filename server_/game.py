@@ -16,6 +16,11 @@ class Map(game_common.Map):
         pos_i = self.get_pos_i(yx)
         self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
 
+    def __iter__(self):
+        for y in range(self.size[0]):
+            for x in range(self.size[1]):
+                yield [y, x]
+
     @property
     def size_i(self):
         return self.size[0] * self.size[1]
@@ -36,11 +41,6 @@ class Map(game_common.Map):
 
     def new_from_shape(self, init_char):
         return Map(self.size, init_char*self.size_i)
-
-    def iterate(self):
-        for y in range(self.size[0]):
-            for x in range(self.size[1]):
-                yield [y, x]
 
     def are_neighbors(self, pos_1, pos_2):
         return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
@@ -117,10 +117,8 @@ class Task:
                 direction = self.args[0]
             else:
                 direction = self.kwargs['direction']
-            test_pos = self.thing.world.map_.move(self.thing.position,
-                                                  direction)
-            map_tile = self.thing.world.map_[test_pos]
-            if map_tile != '.':
+            test_pos = self.thing.world.map_.move(self.thing.position, direction)
+            if self.thing.world.map_[test_pos] != '.':
                 raise GameError('would move into illegal terrain')
             for t in self.thing.world.things:
                 if t.position == test_pos:
@@ -187,7 +185,7 @@ class Thing(game_common.Thing):
         if self._stencil is not None:
             return self._stencil
         m = self.world.map_.new_from_shape('?')
-        for pos in m.iterate():
+        for pos in m:
             if pos == self.position or m.are_neighbors(pos, self.position):
                 m[pos] = '.'
         self._stencil = m
@@ -196,7 +194,7 @@ class Thing(game_common.Thing):
     def get_visible_map(self):
         stencil = self.get_stencil()
         m = self.world.map_.new_from_shape(' ')
-        for pos in m.iterate():
+        for pos in m:
             if stencil[pos] == '.':
                 m[pos] = self.world.map_[pos]
         return m
