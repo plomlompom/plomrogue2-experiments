@@ -51,7 +51,7 @@ class Map(game_common.Map):
     #    return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
 
     def are_neighbors(self, pos_1, pos_2):
-        if pos_1[0] == pos_2[0] and abs(pos_1[1] - pos_2[1] <= 1):
+        if pos_1[0] == pos_2[0] and abs(pos_1[1] - pos_2[1]) <= 1:
             return True
         elif abs(pos_1[0] - pos_2[0]) == 1:
             if pos_1[0] % 2 == 0:
