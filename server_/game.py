@@ -111,6 +111,7 @@ class World(game_common.World):
     def __init__(self):
         super().__init__()
         self.Thing = Thing  # use local Thing class instead of game_common's
+        self.Map = Map # use local Map class instead of game_common's
         self.map_ = Map()  # use extended child class
         self.player_id = 0
 
@@ -276,7 +277,7 @@ class Game(game_common.CommonCommandsMixin):
             return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
         self.io.send('NEW_TURN ' + str(self.world.turn))
-        self.io.send('MAP_SIZE ' + stringify_yx(self.world.map_.size))
+        self.io.send('MAP ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, self.io.quote(line)))

@@ -18,13 +18,6 @@ class Map:
         self.terrain = self.terrain[:y * width_map] + line +\
                        self.terrain[(y + 1) * width_map:]
 
-    def set_size(self, yx):
-        y, x = yx
-        self.size = (y, x)
-        self.terrain = ''
-        for y in range(self.size[0]):
-            self.terrain += '?' * self.size[1]
-
     def get_position_index(self, yx):
         return yx[0] * self.size[1] + yx[1]
 
@@ -32,10 +25,11 @@ class Map:
 class World:
 
     def __init__(self):
-        self.turn = 0
-        self.map_ = Map()
-        self.things = []
+        self.Map = Map  # child classes may use an extended Map class here
         self.Thing = Thing  # child classes may use an extended Thing class here
+        self.turn = 0
+        self.map_ = self.Map()
+        self.things = []
 
     def get_thing(self, id_):
         for thing in self.things:
@@ -44,6 +38,9 @@ class World:
         t = self.Thing(self, id_)
         self.things += [t]
         return t
+
+    def new_map(self, yx):
+        self.map_ = self.Map(yx, '?')
 
 
 class Thing:
@@ -57,10 +54,10 @@ class Thing:
 
 class CommonCommandsMixin:
 
-    def cmd_MAP_SIZE(self, yx):
-        """Set self.map_size to yx, redraw self.terrain_map as '?' cells."""
-        self.world.map_.set_size(yx)
-    cmd_MAP_SIZE.argtypes = 'yx_tuple:nonneg'
+    def cmd_MAP(self, yx):
+        """Create new map of size yx and only '?' cells."""
+        self.world.new_map(yx)
+    cmd_MAP.argtypes = 'yx_tuple:nonneg'
 
     def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)
