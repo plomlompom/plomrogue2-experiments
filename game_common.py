@@ -25,6 +25,9 @@ class Map:
         for y in range(self.size[0]):
             self.terrain += '?' * self.size[1]
 
+    def get_position_index(self, yx):
+        return yx[0] * self.size[1] + yx[1]
+
 
 class World:
 

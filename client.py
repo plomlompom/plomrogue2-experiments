@@ -60,18 +60,33 @@ class WidgetManager:
 
     def draw_map(self):
         """Draw map view from .game.map_.terrain, .game.things."""
-        map_lines = []
-        map_size = len(self.game.world.map_.terrain)
-        start_cut = 0
-        while start_cut < map_size:
-            limit = start_cut + self.game.world.map_.size[1]
-            map_lines += [self.game.world.map_.terrain[start_cut:limit]]
-            start_cut = limit
+        terrain_as_list = list(self.game.world.map_.terrain[:])
         for t in self.game.world.things:
-            line_as_list = list(map_lines[t.position[0]])
-            line_as_list[t.position[1]] = self.game.symbol_for_type(t.type_)
-            map_lines[t.position[0]] = ''.join(line_as_list)
-        return "\n".join(map_lines)
+            pos_i = self.game.world.map_.get_position_index(t.position)
+            terrain_as_list[pos_i] = self.game.symbol_for_type(t.type_)
+
+        #terrain = ''.join(terrain_as_list)
+        #map_lines = []
+        #start_cut = 0
+        #while start_cut < len(terrain):
+        #    limit = start_cut + self.game.world.map_.size[1]
+        #    map_lines += [terrain[start_cut:limit]]
+        #    start_cut = limit
+        #return "\n".join(map_lines)
+
+        new_terrain_list = []
+        x = 0
+        y = 0
+        for c in terrain_as_list:
+            new_terrain_list += [c, ' ']
+            x += 1
+            if x == self.game.world.map_.size[1]:
+                new_terrain_list += ['\n']
+                x = 0
+                y += 1
+                if y % 2 != 0:
+                    new_terrain_list += [' ']
+        return ''.join(new_terrain_list)
 
     def update(self):
         """Redraw all non-edit widgets."""

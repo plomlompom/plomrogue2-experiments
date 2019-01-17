@@ -44,14 +44,22 @@ class Map(game_common.Map):
                 directions += [name[5:]]
         return directions
 
-    def get_position_index(self, yx):
-        return yx[0] * self.size[1] + yx[1]
-
     def new_from_shape(self, init_char):
         return Map(self.size, init_char*self.size_i)
 
+    #def are_neighbors(self, pos_1, pos_2):
+    #    return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
+
     def are_neighbors(self, pos_1, pos_2):
-        return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
+        if pos_1[0] == pos_2[0] and abs(pos_1[1] - pos_2[1] <= 1):
+            return True
+        elif abs(pos_1[0] - pos_2[0]) == 1:
+            if pos_1[0] % 2 == 0:
+                if pos_2[1] in (pos_1[1], pos_1[1] - 1):
+                    return True
+            elif pos_2[1] in (pos_1[1], pos_1[1] + 1):
+                return True
+        return False
 
     def move(self, start_pos, direction):
         mover = getattr(self, 'move_' + direction)
@@ -61,17 +69,41 @@ class Map(game_common.Map):
             raise GameError('would move outside map bounds')
         return new_pos
 
-    def move_UP(self, start_pos):
-        return [start_pos[0] - 1, start_pos[1]]
-
-    def move_DOWN(self, start_pos):
-        return [start_pos[0] + 1, start_pos[1]]
-
     def move_LEFT(self, start_pos):
         return [start_pos[0], start_pos[1] - 1]
 
     def move_RIGHT(self, start_pos):
         return [start_pos[0], start_pos[1] + 1]
+
+    #def move_UP(self, start_pos):
+    #    return [start_pos[0] - 1, start_pos[1]]
+
+    #def move_DOWN(self, start_pos):
+    #    return [start_pos[0] + 1, start_pos[1]]
+
+    def move_UPLEFT(self, start_pos):
+        if start_pos[0] % 2 == 0:
+            return [start_pos[0] - 1, start_pos[1] - 1]
+        else:
+            return [start_pos[0] - 1, start_pos[1]]
+
+    def move_UPRIGHT(self, start_pos):
+        if start_pos[0] % 2 == 0:
+            return [start_pos[0] - 1, start_pos[1]]
+        else:
+            return [start_pos[0] - 1, start_pos[1] + 1]
+
+    def move_DOWNLEFT(self, start_pos):
+        if start_pos[0] % 2 == 0:
+            return [start_pos[0] + 1, start_pos[1] - 1]
+        else:
+            return [start_pos[0] + 1, start_pos[1]]
+
+    def move_DOWNRIGHT(self, start_pos):
+        if start_pos[0] % 2 == 0:
+            return [start_pos[0] + 1, start_pos[1]]
+        else:
+            return [start_pos[0] + 1, start_pos[1] + 1]
 
 
 class World(game_common.World):
