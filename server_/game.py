@@ -33,10 +33,6 @@ class Map(game_common.Map):
     #        for x in range(self.size[1]):
     #            yield ([y, x], self.terrain[self.get_position_index([y, x])])
 
-    @property
-    def size_i(self):
-        return self.size[0] * self.size[1]
-
     def get_directions(self):
         directions = []
         for name in dir(self):
@@ -45,21 +41,11 @@ class Map(game_common.Map):
         return directions
 
     def new_from_shape(self, init_char):
-        return Map(self.size, init_char*self.size_i)
-
-    #def are_neighbors(self, pos_1, pos_2):
-    #    return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
-
-    def are_neighbors(self, pos_1, pos_2):
-        if pos_1[0] == pos_2[0] and abs(pos_1[1] - pos_2[1]) <= 1:
-            return True
-        elif abs(pos_1[0] - pos_2[0]) == 1:
-            if pos_1[0] % 2 == 0:
-                if pos_2[1] in (pos_1[1], pos_1[1] - 1):
-                    return True
-            elif pos_2[1] in (pos_1[1], pos_1[1] + 1):
-                return True
-        return False
+        import copy
+        new_map = copy.deepcopy(self)
+        for pos in new_map:
+            new_map[pos] = init_char
+        return new_map
 
     def move(self, start_pos, direction):
         mover = getattr(self, 'move_' + direction)
@@ -75,11 +61,19 @@ class Map(game_common.Map):
     def move_RIGHT(self, start_pos):
         return [start_pos[0], start_pos[1] + 1]
 
-    #def move_UP(self, start_pos):
-    #    return [start_pos[0] - 1, start_pos[1]]
 
-    #def move_DOWN(self, start_pos):
-    #    return [start_pos[0] + 1, start_pos[1]]
+class MapHex(Map):
+
+    def are_neighbors(self, pos_1, pos_2):
+        if pos_1[0] == pos_2[0] and abs(pos_1[1] - pos_2[1]) <= 1:
+            return True
+        elif abs(pos_1[0] - pos_2[0]) == 1:
+            if pos_1[0] % 2 == 0:
+                if pos_2[1] in (pos_1[1], pos_1[1] - 1):
+                    return True
+            elif pos_2[1] in (pos_1[1], pos_1[1] + 1):
+                return True
+        return False
 
     def move_UPLEFT(self, start_pos):
         if start_pos[0] % 2 == 0:
@@ -106,14 +100,27 @@ class Map(game_common.Map):
             return [start_pos[0] + 1, start_pos[1] + 1]
 
 
+class MapSquare(Map):
+
+    def are_neighbors(self, pos_1, pos_2):
+        return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
+
+    def move_UP(self, start_pos):
+        return [start_pos[0] - 1, start_pos[1]]
+
+    def move_DOWN(self, start_pos):
+        return [start_pos[0] + 1, start_pos[1]]
+
+
 class World(game_common.World):
 
     def __init__(self):
         super().__init__()
-        self.Thing = Thing  # use local Thing class instead of game_common's
-        self.Map = Map # use local Map class instead of game_common's
-        self.map_ = Map()  # use extended child class
         self.player_id = 0
+        # use extended local classes
+        self.Thing = Thing
+        self.MapHex = MapHex
+        self.MapSquare = MapSquare
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -277,7 +284,8 @@ class Game(game_common.CommonCommandsMixin):
             return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
         self.io.send('NEW_TURN ' + str(self.world.turn))
-        self.io.send('MAP ' + stringify_yx(self.world.map_.size))
+        grid = self.world.map_.__class__.__name__[3:]
+        self.io.send('MAP ' + grid +' ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, self.io.quote(line)))

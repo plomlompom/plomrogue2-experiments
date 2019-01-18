@@ -3,9 +3,13 @@ from parser import ArgError
 
 class Map:
 
-    def __init__(self, size=(0, 0), terrain=''):
+    def __init__(self, size=(0, 0)):
         self.size = size
-        self.terrain = terrain
+        self.terrain = '?'*self.size_i
+
+    @property
+    def size_i(self):
+        return self.size[0] * self.size[1]
 
     def set_line(self, y, line):
         height_map = self.size[0]
@@ -25,10 +29,8 @@ class Map:
 class World:
 
     def __init__(self):
-        self.Map = Map  # child classes may use an extended Map class here
         self.Thing = Thing  # child classes may use an extended Thing class here
         self.turn = 0
-        self.map_ = self.Map()
         self.things = []
 
     def get_thing(self, id_):
@@ -39,8 +41,9 @@ class World:
         self.things += [t]
         return t
 
-    def new_map(self, yx):
-        self.map_ = self.Map(yx, '?')
+    def new_map(self, geometry, yx):
+        map_type = getattr(self, 'Map' + geometry)
+        self.map_ = map_type(yx)
 
 
 class Thing:
@@ -54,10 +57,14 @@ class Thing:
 
 class CommonCommandsMixin:
 
-    def cmd_MAP(self, yx):
-        """Create new map of size yx and only '?' cells."""
-        self.world.new_map(yx)
-    cmd_MAP.argtypes = 'yx_tuple:nonneg'
+    def cmd_MAP(self, geometry, yx):
+        """Create new map of grid geometry, size yx and only '?' cells."""
+        legal_grids = {'Hex', 'Square'}
+        if geometry not in legal_grids:
+            raise ArgError('First map argument must be one of: ' +
+                           ', '.join(legal_grids))
+        self.world.new_map(geometry, yx)
+    cmd_MAP.argtypes = 'string yx_tuple:nonneg'
 
     def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)

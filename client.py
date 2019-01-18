@@ -4,10 +4,55 @@ import plom_socket_io
 import socket
 import threading
 from parser import ArgError, Parser
-from game_common import World, CommonCommandsMixin
+import game_common
 
 
-class Game(CommonCommandsMixin):
+class MapSquare(game_common.Map):
+
+    def list_terrain_to_lines(self, terrain_as_list):
+        terrain = ''.join(terrain_as_list)
+        map_lines = []
+        start_cut = 0
+        while start_cut < len(terrain):
+            limit = start_cut + self.game.world.map_.size[1]
+            map_lines += [terrain[start_cut:limit]]
+            start_cut = limit
+        return "\n".join(map_lines)
+
+
+class MapHex(game_common.Map):
+
+    def list_terrain_to_lines(self, terrain_as_list):
+        new_terrain_list = []
+        x = 0
+        y = 0
+        for c in terrain_as_list:
+            new_terrain_list += [c, ' ']
+            x += 1
+            if x == self.size[1]:
+                new_terrain_list += ['\n']
+                x = 0
+                y += 1
+                if y % 2 != 0:
+                    new_terrain_list += [' ']
+        return ''.join(new_terrain_list)
+
+
+class World(game_common.World):
+
+    def __init__(self, *args, **kwargs):
+        """Extend original with local classes and empty default map.
+
+        We need the empty default map because we draw the map widget
+        on any update, even before we actually receive map data.
+        """
+        super().__init__(*args, **kwargs)
+        self.MapHex = MapHex
+        self.MapSquare = MapSquare
+        self.map_ = self.MapHex()
+
+
+class Game(game_common.CommonCommandsMixin):
     world = World()
     log_text = ''
 
@@ -64,29 +109,7 @@ class WidgetManager:
         for t in self.game.world.things:
             pos_i = self.game.world.map_.get_position_index(t.position)
             terrain_as_list[pos_i] = self.game.symbol_for_type(t.type_)
-
-        #terrain = ''.join(terrain_as_list)
-        #map_lines = []
-        #start_cut = 0
-        #while start_cut < len(terrain):
-        #    limit = start_cut + self.game.world.map_.size[1]
-        #    map_lines += [terrain[start_cut:limit]]
-        #    start_cut = limit
-        #return "\n".join(map_lines)
-
-        new_terrain_list = []
-        x = 0
-        y = 0
-        for c in terrain_as_list:
-            new_terrain_list += [c, ' ']
-            x += 1
-            if x == self.game.world.map_.size[1]:
-                new_terrain_list += ['\n']
-                x = 0
-                y += 1
-                if y % 2 != 0:
-                    new_terrain_list += [' ']
-        return ''.join(new_terrain_list)
+        return self.game.world.map_.list_terrain_to_lines(terrain_as_list)
 
     def update(self):
         """Redraw all non-edit widgets."""

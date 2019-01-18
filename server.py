@@ -20,7 +20,7 @@ if os.path.exists(game_file_name):
             print("FILE INPUT LINE %s: %s" % (i, line), end='')
             game.io.handle_input(line, store=False)
 else:
-    game.io.handle_input('MAP Y:5,X:5')
+    game.io.handle_input('MAP Hex Y:5,X:5')
     game.io.handle_input('TERRAIN_LINE 0 "xxxxx"')
     game.io.handle_input('TERRAIN_LINE 1 "x...x"')
     game.io.handle_input('TERRAIN_LINE 2 "x.X.x"')
