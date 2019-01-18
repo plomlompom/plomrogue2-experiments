@@ -7,6 +7,10 @@ from parser import ArgError, Parser
 import game_common
 
 
+def get_map_class(geometry):
+    return globals()['Map' + geometry]
+
+
 class MapSquare(game_common.Map):
 
     def list_terrain_to_lines(self, terrain_as_list):
@@ -47,9 +51,8 @@ class World(game_common.World):
         on any update, even before we actually receive map data.
         """
         super().__init__(*args, **kwargs)
-        self.MapHex = MapHex
-        self.MapSquare = MapSquare
-        self.map_ = self.MapHex()
+        self.get_map_class = get_map_class
+        self.map_ = self.get_map_class('Hex')()
 
 
 class Game(game_common.CommonCommandsMixin):

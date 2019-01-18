@@ -42,7 +42,7 @@ class World:
         return t
 
     def new_map(self, geometry, yx):
-        map_type = getattr(self, 'Map' + geometry)
+        map_type = self.get_map_class(geometry)
         self.map_ = map_type(yx)
 
 
