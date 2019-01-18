@@ -19,6 +19,10 @@ class Map(game_common.Map):
             for x in range(self.size[1]):
                 yield [y, x]
 
+    @property
+    def geometry(self):
+        return self.__class__.__name__[3:]
+
     def lines(self):
         width = self.size[1]
         for y in range(self.size[0]):

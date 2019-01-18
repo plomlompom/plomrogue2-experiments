@@ -163,7 +163,6 @@ class Game(game_common.CommonCommandsMixin):
 
     def __init__(self, game_file_name):
         import server_.io
-        #self.get_map_class = server_.map_.get_map_class
         self.map_manager = server_.map_.map_manager
         self.world = World(self)
         self.io = server_.io.GameIO(game_file_name, self)
@@ -181,8 +180,8 @@ class Game(game_common.CommonCommandsMixin):
             return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
 
         self.io.send('NEW_TURN ' + str(self.world.turn))
-        grid = self.world.map_.__class__.__name__[3:]
-        self.io.send('MAP ' + grid +' ' + stringify_yx(self.world.map_.size))
+        self.io.send('MAP ' + self.world.map_.geometry +\
+                     ' ' + stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, self.io.quote(line)))
