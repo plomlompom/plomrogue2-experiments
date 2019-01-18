@@ -10,12 +10,12 @@ class GameError(Exception):
 
 class World(game_common.World):
 
-    def __init__(self):
+    def __init__(self, game):
         super().__init__()
+        self.game = game
         self.player_id = 0
         # use extended local classes
         self.Thing = Thing
-        self.get_map_class = server_.map_.get_map_class
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -163,7 +163,9 @@ class Game(game_common.CommonCommandsMixin):
 
     def __init__(self, game_file_name):
         import server_.io
-        self.world = World()
+        #self.get_map_class = server_.map_.get_map_class
+        self.map_manager = server_.map_.map_manager
+        self.world = World(self)
         self.io = server_.io.GameIO(game_file_name, self)
         # self.pool and self.pool_result are currently only needed by the FIB
         # command and the demo of a parallelized game loop in cmd_inc_p.

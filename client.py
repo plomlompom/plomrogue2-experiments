@@ -7,10 +7,6 @@ from parser import ArgError, Parser
 import game_common
 
 
-def get_map_class(geometry):
-    return globals()['Map' + geometry]
-
-
 class MapSquare(game_common.Map):
 
     def list_terrain_to_lines(self, terrain_as_list):
@@ -42,22 +38,28 @@ class MapHex(game_common.Map):
         return ''.join(new_terrain_list)
 
 
+map_manager = game_common.MapManager(globals())
+
+
 class World(game_common.World):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, game, *args, **kwargs):
         """Extend original with local classes and empty default map.
 
         We need the empty default map because we draw the map widget
         on any update, even before we actually receive map data.
         """
         super().__init__(*args, **kwargs)
-        self.get_map_class = get_map_class
-        self.map_ = self.get_map_class('Hex')()
+        self.game = game
+        self.map_ = self.game.map_manager.get_map_class('Hex')()
 
 
 class Game(game_common.CommonCommandsMixin):
-    world = World()
-    log_text = ''
+
+    def __init__(self):
+        self.map_manager = map_manager
+        self.world = World(self)
+        self.log_text = ''
 
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""

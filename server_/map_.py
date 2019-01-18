@@ -111,3 +111,6 @@ class MapSquare(Map):
 
 def get_map_class(geometry):
     return globals()['Map' + geometry]
+
+
+map_manager = game_common.MapManager(globals())

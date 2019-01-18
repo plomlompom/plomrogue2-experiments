@@ -1,6 +1,27 @@
 from parser import ArgError
 
 
+class MapManager:
+
+    def __init__(self, globs):
+        """With globs a globals() call, collect caller's Map classes."""
+        self.map_classes = []
+        for name in globs:
+            if name[:3] == 'Map':
+                self.map_classes += [globs[name]]
+
+    def get_map_geometries(self):
+        geometries = []
+        for map_class in self.map_classes:
+            geometries += [map_class.__name__[3:]]
+        return geometries
+
+    def get_map_class(self, geometry):
+        for map_class in self.map_classes:
+            if map_class.__name__[3:] == geometry:
+                return map_class
+
+
 class Map:
 
     def __init__(self, size=(0, 0)):
@@ -42,7 +63,7 @@ class World:
         return t
 
     def new_map(self, geometry, yx):
-        map_type = self.get_map_class(geometry)
+        map_type = self.game.map_manager.get_map_class(geometry)
         self.map_ = map_type(yx)
 
 
@@ -59,7 +80,7 @@ class CommonCommandsMixin:
 
     def cmd_MAP(self, geometry, yx):
         """Create new map of grid geometry, size yx and only '?' cells."""
-        legal_grids = {'Hex', 'Square'}
+        legal_grids = self.map_manager.get_map_geometries()
         if geometry not in legal_grids:
             raise ArgError('First map argument must be one of: ' +
                            ', '.join(legal_grids))
