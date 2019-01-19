@@ -114,69 +114,81 @@ class MapFovHex(MapHex):
         self.size = self.source_map.size
         self.terrain = '?' * self.size_i
         self[yx] = '.'
-        self.shadow_angles = []
+        self.shadow_cones = []
         self.circle_out(yx, self.shadow_process_hex)
 
-    def shadow_process_hex(self, yx, distance_to_center, dir_i, hex_i):
-        # TODO: If no shadow_angles yet and self[yx] == '.', skip all.
+    def shadow_process_hex(self, yx, distance_to_center, dir_i, dir_progress):
+        # Possible optimization: If no shadow_cones yet and self[yx] == '.',
+        # skip all.
         CIRCLE = 360  # Since we'll float anyways, number is actually arbitrary.
 
-        def correct_angle(angle):
-            if angle < 0:
-                angle += CIRCLE
-            return angle
+        def correct_arm(arm):
+            if arm < 0:
+                arm += CIRCLE
+            return arm
 
-        def under_shadow_angle(new_angle):
-            for old_angle in self.shadow_angles:
-                if old_angle[0] >= new_angle[0] and \
-                    new_angle[1] >= old_angle[1]:
-                    #print('DEBUG shadowed by:', old_angle)
+        def in_shadow_cone(new_cone):
+            for old_cone in self.shadow_cones:
+                if old_cone[0] >= new_cone[0] and \
+                    new_cone[1] >= old_cone[1]:
+                    #print('DEBUG shadowed by:', old_cone)
+                    return True
+                # We might want to also shade hexes whose middle arm is inside a
+                # shadow cone for a darker FOV. Note that we then could not for
+                # optimization purposes rely anymore on the assumption that a
+                # shaded hex cannot add growth to existing shadow cones.
+            return False
+
+        def merge_cone(new_cone):
+            for old_cone in self.shadow_cones:
+                if new_cone[0] > old_cone[0] and \
+                    new_cone[1] <= old_cone[0]:
+                    #print('DEBUG merging to', old_cone)
+                    old_cone[0] = new_cone[0]
+                    #print('DEBUG merged cone:', old_cone)
+                    return True
+                if new_cone[1] < old_cone[1] and \
+                    new_cone[0] >= old_cone[1]:
+                    #print('DEBUG merging to', old_cone)
+                    old_cone[1] = new_cone[1]
+                    #print('DEBUG merged cone:', old_cone)
                     return True
             return False
 
-        def merge_angle(new_angle):
-            for old_angle in self.shadow_angles:
-                if new_angle[0] > old_angle[0] and \
-                    new_angle[1] <= old_angle[0]:
-                    #print('DEBUG merging to', old_angle)
-                    old_angle[0] = new_angle[0]
-                    #print('DEBUG merged angle:', old_angle)
-                    return True
-                if new_angle[1] < old_angle[1] and \
-                    new_angle[0] >= old_angle[1]:
-                    #print('DEBUG merging to', old_angle)
-                    old_angle[1] = new_angle[1]
-                    #print('DEBUG merged angle:', old_angle)
-                    return True
-            return False
-
-        def eval_angle(angle):
-            new_angle = [left_angle, right_angle]
-            #print('DEBUG ANGLE', angle, '(', step_size, distance_to_center, number_steps, ')')
-            if under_shadow_angle(angle):
+        def eval_cone(cone):
+            new_cone = [left_arm, right_arm]
+            #print('DEBUG CONE', cone, '(', step_size, distance_to_center, number_steps, ')')
+            if in_shadow_cone(cone):
                 return
             self[yx] = '.'
             if self.source_map[yx] != '.':
-                #print('DEBUG throws shadow', angle)
+                #print('DEBUG throws shadow', cone)
                 unmerged = True
-                while merge_angle(angle):
+                while merge_cone(cone):
                     unmerged = False
                 if unmerged:
-                    self.shadow_angles += [angle]
+                    self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
         step_size = (CIRCLE/6)/distance_to_center
-        number_steps = dir_i * distance_to_center + hex_i
-        left_angle = correct_angle(-(step_size/2) - step_size*number_steps)
-        right_angle = correct_angle(left_angle - step_size)
-        # TODO: derive left_angle from prev right_angle where possible
-        if right_angle > left_angle:
-            eval_angle([left_angle, 0])
-            eval_angle([CIRCLE, right_angle])
+        number_steps = dir_i * distance_to_center + dir_progress
+        left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
+        right_arm = correct_arm(left_arm - step_size)
+        # Optimization potential: left cone could be derived from previous
+        # right cone. Better even: Precalculate all cones.
+        if right_arm > left_arm:
+            eval_cone([left_arm, 0])
+            eval_cone([CIRCLE, right_arm])
         else:
-            eval_angle([left_angle, right_angle])
+            eval_cone([left_arm, right_arm])
 
     def circle_out(self, yx, f):
+        # Optimization potential: Precalculate movement positions. (How to check
+        # circle_in_map then?)
+        # Optimization potential: Precalculate what hexes are shaded by what hex
+        # and skip evaluation of already shaded hexes. (This only works if hex
+        # shading implies they completely lie in existing shades; otherwise we
+        # would lose shade growth through hexes at shade borders.)
 
         def move(pos, direction):
             """Move position pos into direction. Return whether still in map."""
@@ -191,17 +203,16 @@ class MapFovHex(MapHex):
         directions = ('DOWNLEFT', 'LEFT', 'UPLEFT', 'UPRIGHT', 'RIGHT', 'DOWNRIGHT')
         circle_in_map = True
         distance = 1
-        first_direction = 'RIGHT'
         yx = yx[:]
         #print('DEBUG CIRCLE_OUT', yx)
         while circle_in_map:
             circle_in_map = False
             move(yx, 'RIGHT')
             for dir_i in range(len(directions)):
-                for hex_i in range(distance):
+                for dir_progress in range(distance):
                     direction = directions[dir_i]
                     if move(yx, direction):
-                        f(yx, distance, dir_i, hex_i)
+                        f(yx, distance, dir_i, dir_progress)
                         circle_in_map = True
             distance += 1
 
@@ -217,6 +228,104 @@ class MapSquare(Map):
 
     def move_DOWN(self, start_pos):
         return [start_pos[0] + 1, start_pos[1]]
+
+
+class MapFovSquare(MapSquare):
+    """Just a marginally and unsatisfyingly adapted variant of MapFovHex."""
+
+    def __init__(self, source_map, yx):
+        self.source_map = source_map
+        self.size = self.source_map.size
+        self.terrain = '?' * self.size_i
+        self[yx] = '.'
+        self.shadow_cones = []
+        self.circle_out(yx, self.shadow_process_hex)
+
+    def shadow_process_hex(self, yx, distance_to_center, dir_i, dir_progress):
+        CIRCLE = 360  # Since we'll float anyways, number is actually arbitrary.
+
+        def correct_arm(arm):
+            if arm < 0:
+                arm += CIRCLE
+            return arm
+
+        def in_shadow_cone(new_cone):
+            for old_cone in self.shadow_cones:
+                if old_cone[0] >= new_cone[0] and \
+                    new_cone[1] >= old_cone[1]:
+                    #print('DEBUG shadowed by:', old_cone)
+                    return True
+            return False
+
+        def merge_cone(new_cone):
+            for old_cone in self.shadow_cones:
+                if new_cone[0] > old_cone[0] and \
+                    new_cone[1] <= old_cone[0]:
+                    #print('DEBUG merging to', old_cone)
+                    old_cone[0] = new_cone[0]
+                    #print('DEBUG merged cone:', old_cone)
+                    return True
+                if new_cone[1] < old_cone[1] and \
+                    new_cone[0] >= old_cone[1]:
+                    #print('DEBUG merging to', old_cone)
+                    old_cone[1] = new_cone[1]
+                    #print('DEBUG merged cone:', old_cone)
+                    return True
+            return False
+
+        def eval_cone(cone):
+            new_cone = [left_arm, right_arm]
+            #print('DEBUG CONE', cone, '(', step_size, distance_to_center, number_steps, ')')
+            if in_shadow_cone(cone):
+                return
+            self[yx] = '.'
+            if self.source_map[yx] != '.':
+                #print('DEBUG throws shadow', cone)
+                unmerged = True
+                while merge_cone(cone):
+                    unmerged = False
+                if unmerged:
+                    self.shadow_cones += [cone]
+
+        #print('DEBUG', yx)
+        step_size = (CIRCLE/4)/distance_to_center
+        number_steps = dir_i * distance_to_center + dir_progress
+        left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
+        right_arm = correct_arm(left_arm - step_size)
+        if right_arm > left_arm:
+            eval_cone([left_arm, 0])
+            eval_cone([CIRCLE, right_arm])
+        else:
+            eval_cone([left_arm, right_arm])
+
+    def circle_out(self, yx, f):
+
+        def move(pos, direction):
+            """Move position pos into direction. Return whether still in map."""
+            mover = getattr(self, 'move_' + direction)
+            pos[:] = mover(pos)
+            if pos[0] < 0 or pos[1] < 0 or \
+               pos[0] >= self.size[0] or pos[1] >= self.size[1]:
+                return False
+            return True
+
+        directions = (('DOWN', 'LEFT'), ('LEFT', 'UP'),
+                      ('UP', 'RIGHT'), ('RIGHT', 'DOWN'))
+        circle_in_map = True
+        distance = 1
+        yx = yx[:]
+        #print('DEBUG CIRCLE_OUT', yx)
+        while circle_in_map:
+            circle_in_map = False
+            move(yx, 'RIGHT')
+            for dir_i in range(len(directions)):
+                for dir_progress in range(distance):
+                    direction = directions[dir_i]
+                    move(yx, direction[0])
+                    if move(yx, direction[1]):
+                        f(yx, distance, dir_i, dir_progress)
+                        circle_in_map = True
+            distance += 1
 
 
 map_manager = game_common.MapManager(globals())

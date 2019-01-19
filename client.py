@@ -14,7 +14,7 @@ class MapSquare(game_common.Map):
         map_lines = []
         start_cut = 0
         while start_cut < len(terrain):
-            limit = start_cut + self.game.world.map_.size[1]
+            limit = start_cut + self.size[1]
             map_lines += [terrain[start_cut:limit]]
             start_cut = limit
         return "\n".join(map_lines)
