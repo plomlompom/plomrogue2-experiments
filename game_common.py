@@ -85,7 +85,7 @@ class CommonCommandsMixin:
             raise ArgError('First map argument must be one of: ' +
                            ', '.join(legal_grids))
         self.world.new_map(geometry, yx)
-    cmd_MAP.argtypes = 'string yx_tuple:nonneg'
+    cmd_MAP.argtypes = 'string yx_tuple:pos'
 
     def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)
