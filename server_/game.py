@@ -44,6 +44,26 @@ class World(game_common.World):
     def get_player(self):
         return self.get_thing(self.player_id)
 
+    def make_new(self, geometry, yx, seed):
+        import random
+        random.seed(seed)
+        self.turn = 0
+        self.new_map(geometry, yx)
+        for pos in self.map_:
+            if 0 in pos or (yx[0] - 1) == pos[0] or (yx[1] - 1) == pos[1]:
+                self.map_[pos] = '#'
+                continue
+            self.map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
+        player = self.Thing(self, 0)
+        player.type_ = 'human'
+        player.position = [random.randint(0, yx[0] -1),
+                           random.randint(0, yx[1] - 1)]
+        npc = self.Thing(self, 1)
+        npc.type_ = 'monster'
+        npc.position = [random.randint(0, yx[0] -1),
+                        random.randint(0, yx[1] -1)]
+        self.things = [player, npc]
+
 
 class Task:
 
@@ -84,12 +104,12 @@ class Thing(game_common.Thing):
         return 'success'
 
     def decide_task(self):
-        if self.position[1] > 1:
-            self.set_task('move', 'LEFT')
-        elif self.position[1] < 3:
-            self.set_task('move', 'RIGHT')
-        else:
-            self.set_task('wait')
+        #if self.position[1] > 1:
+        #    self.set_task('move', 'LEFT')
+        #elif self.position[1] < 3:
+        #    self.set_task('move', 'RIGHT')
+        #else:
+        self.set_task('wait')
 
     def set_task(self, task_name, *args, **kwargs):
         self.task = Task(self, task_name, args, kwargs)
@@ -267,3 +287,11 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_TERRAIN_LINE(self, y, terrain_line):
         self.world.map_.set_line(y, terrain_line)
     cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
+
+    def cmd_GEN_WORLD(self, geometry, yx, seed):
+        legal_grids = self.map_manager.get_map_geometries()
+        if geometry not in legal_grids:
+            raise ArgError('First map argument must be one of: ' +
+                           ', '.join(legal_grids))
+        self.world.make_new(geometry, yx, seed)
+    cmd_GEN_WORLD.argtypes = 'string yx_tuple:pos string'
