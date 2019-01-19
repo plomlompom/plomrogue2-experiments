@@ -23,7 +23,7 @@ class MapSquare(game_common.Map):
 class MapHex(game_common.Map):
 
     def list_terrain_to_lines(self, terrain_as_list):
-        new_terrain_list = []
+        new_terrain_list = [' ']
         x = 0
         y = 0
         for c in terrain_as_list:
@@ -33,7 +33,7 @@ class MapHex(game_common.Map):
                 new_terrain_list += ['\n']
                 x = 0
                 y += 1
-                if y % 2 != 0:
+                if y % 2 == 0:
                     new_terrain_list += [' ']
         return ''.join(new_terrain_list)
 

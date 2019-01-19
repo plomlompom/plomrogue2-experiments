@@ -83,25 +83,25 @@ class MapHex(Map):
     #    return False
 
     def move_UPLEFT(self, start_pos):
-        if start_pos[0] % 2 == 0:
+        if start_pos[0] % 2 == 1:
             return [start_pos[0] - 1, start_pos[1] - 1]
         else:
             return [start_pos[0] - 1, start_pos[1]]
 
     def move_UPRIGHT(self, start_pos):
-        if start_pos[0] % 2 == 0:
+        if start_pos[0] % 2 == 1:
             return [start_pos[0] - 1, start_pos[1]]
         else:
             return [start_pos[0] - 1, start_pos[1] + 1]
 
     def move_DOWNLEFT(self, start_pos):
-        if start_pos[0] % 2 == 0:
+        if start_pos[0] % 2 == 1:
             return [start_pos[0] + 1, start_pos[1] - 1]
         else:
             return [start_pos[0] + 1, start_pos[1]]
 
     def move_DOWNRIGHT(self, start_pos):
-        if start_pos[0] % 2 == 0:
+        if start_pos[0] % 2 == 1:
             return [start_pos[0] + 1, start_pos[1]]
         else:
             return [start_pos[0] + 1, start_pos[1] + 1]
@@ -118,6 +118,7 @@ class MapFovHex(MapHex):
         self.circle_out(yx, self.shadow_process_hex)
 
     def shadow_process_hex(self, yx, distance_to_center, dir_i, hex_i):
+        # TODO: If no shadow_angles yet and self[yx] == '.', skip all.
         CIRCLE = 360  # Since we'll float anyways, number is actually arbitrary.
 
         def correct_angle(angle):
@@ -155,7 +156,7 @@ class MapFovHex(MapHex):
             if under_shadow_angle(angle):
                 return
             self[yx] = '.'
-            if not self.source_map[yx] == '.':
+            if self.source_map[yx] != '.':
                 #print('DEBUG throws shadow', angle)
                 unmerged = True
                 while merge_angle(angle):
@@ -168,6 +169,7 @@ class MapFovHex(MapHex):
         number_steps = dir_i * distance_to_center + hex_i
         left_angle = correct_angle(-(step_size/2) - step_size*number_steps)
         right_angle = correct_angle(left_angle - step_size)
+        # TODO: derive left_angle from prev right_angle where possible
         if right_angle > left_angle:
             eval_angle([left_angle, 0])
             eval_angle([CIRCLE, right_angle])
@@ -185,6 +187,7 @@ class MapFovHex(MapHex):
                 return False
             return True
 
+        # TODO: Start circling only in earliest obstacle distance.
         directions = ('DOWNLEFT', 'LEFT', 'UPLEFT', 'UPRIGHT', 'RIGHT', 'DOWNRIGHT')
         circle_in_map = True
         distance = 1
