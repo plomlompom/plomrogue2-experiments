@@ -67,16 +67,22 @@ class Parser:
         args, kwargs = self.argsparse(method.argtypes, args_candidates)
         return partial(method, *args, **kwargs)
 
-    def parse_yx_tuple(self, yx_string):
-        """Parse yx_string as yx_tuple:nonneg argtype, return result."""
+    def parse_yx_tuple(self, yx_string, range_):
+        """Parse yx_string as yx_tuple:nonneg argtype, return result.
+
+        The range_ argument may be 'nonneg' (non-negative, including 0)
+        or 'pos' (positive, excluding 0).
+        """
 
         def get_axis_position_from_argument(axis, token):
             if len(token) < 3 or token[:2] != axis + ':' or \
                     not token[2:].isdigit():
                 raise ArgError('Non-int arg for ' + axis + ' position.')
             n = int(token[2:])
-            if n < 1:
+            if n < 1 and range_ == 'pos':
                 raise ArgError('Arg for ' + axis + ' position < 1.')
+            elif n < 0 and range_ == 'nonneg':
+                raise ArgError('Arg for ' + axis + ' position < 0.')
             return n
 
         tokens = yx_string.split(',')
@@ -90,8 +96,8 @@ class Parser:
         """Parse into / return args_tokens as args/kwargs defined by signature.
 
         Expects signature to be a ' '-delimited sequence of any of the strings
-        'int:nonneg', 'yx_tuple:nonneg', 'string', 'seq:int:nonneg', defining
-        the respective argument types.
+        'int:nonneg', 'yx_tuple:nonneg', 'yx_tuple:pos', 'string',
+        'seq:int:nonneg', defining the respective argument types.
         """
         tmpl_tokens = signature.split()
         if len(tmpl_tokens) != len(args_tokens):
@@ -107,7 +113,9 @@ class Parser:
                     raise ArgError('Argument must be non-negative integer.')
                 args += [int(arg)]
             elif tmpl == 'yx_tuple:nonneg':
-                args += [self.parse_yx_tuple(arg)]
+                args += [self.parse_yx_tuple(arg, 'nonneg')]
+            elif tmpl == 'yx_tuple:pos':
+                args += [self.parse_yx_tuple(arg, 'pos')]
             elif tmpl == 'string':
                 args += [arg]
             elif tmpl == 'seq:int:nonneg':
@@ -165,12 +173,14 @@ class TestParser(unittest.TestCase):
         self.assertEqual(p.argsparse('int:nonneg', ('0',)),
                          ([0], {}))
         assertErr('yx_tuple:nonneg', ['x'])
-        assertErr('yx_tuple:nonneg', ['Y:0,X:1'])
-        assertErr('yx_tuple:nonneg', ['Y:1,X:0'])
+        assertErr('yx_tuple:nonneg', ['Y:0,X:-1'])
+        assertErr('yx_tuple:nonneg', ['Y:-1,X:0'])
         assertErr('yx_tuple:nonneg', ['Y:1.1,X:1'])
         assertErr('yx_tuple:nonneg', ['Y:1,X:1.1'])
         self.assertEqual(p.argsparse('yx_tuple:nonneg', ('Y:1,X:2',)),
                          ([(1, 2)], {}))
+        assertErr('yx_tuple:pos', ['Y:0,X:1'])
+        assertErr('yx_tuple:pos', ['Y:1,X:0'])
         assertErr('seq:int:nonneg', [''])
         assertErr('seq:int:nonneg', [','])
         assertErr('seq:int:nonneg', ['a'])
