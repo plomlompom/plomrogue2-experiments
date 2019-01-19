@@ -127,11 +127,7 @@ class Thing(game_common.Thing):
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        m = self.world.map_.new_from_shape('?')
-        for pos in m:
-            if pos == self.position or m.are_neighbors(pos, self.position):
-                m[pos] = '.'
-        self._stencil = m
+        self._stencil = self.world.map_.get_fov_map(self.position)
         return self._stencil
 
     def get_visible_map(self):
