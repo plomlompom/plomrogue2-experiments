@@ -103,7 +103,6 @@ class WidgetManager:
         self.map_widget = urwid.Text('', wrap='clip')
         self.turn_widget = urwid.Text('')
         self.log_widget = urwid.Text('')
-
         edit_map = urwid.AttrMap(edit_widget, 'foo')
         turn_map = urwid.AttrMap(self.turn_widget, 'bar')
         log_map = urwid.AttrMap(self.log_widget, 'baz')
@@ -114,8 +113,10 @@ class WidgetManager:
                                   log_map])
         widget_columns = urwid.Columns([(20, widget_pile), self.map_widget],
                                        dividechars=1)
-
         self.top = urwid.Filler(widget_columns, valign='top')
+        self.palette = [('foo', 'white', 'dark red'),
+                        ('bar', 'white', 'dark blue'),
+                        ('baz', 'white', 'dark green')]
 
     def draw_map(self):
         """Draw map view from .game.map_.terrain, .game.things."""
@@ -123,15 +124,9 @@ class WidgetManager:
         for t in self.game.world.things:
             pos_i = self.game.world.map_.get_position_index(t.position)
             terrain_as_list[pos_i] = self.game.symbol_for_type(t.type_)
-        return self.game.world.map_.list_terrain_to_lines(terrain_as_list)
-
-    def update(self):
-        """Redraw all non-edit widgets."""
-        self.turn_widget.set_text('TURN: ' + str(self.game.world.turn))
-        self.log_widget.set_text(self.game.log_text)
-        map_lines = self.draw_map()
+        text = self.game.world.map_.list_terrain_to_lines(terrain_as_list)
         new_map_text = []
-        for char in map_lines:
+        for char in text:
             if char == '.':
                 new_map_text += [('foo', char)]
             elif char in {'x', 'X', '#'}:
@@ -140,7 +135,13 @@ class WidgetManager:
                 new_map_text += [('baz', char)]
             else:
                 new_map_text += [char]
-        self.map_widget.set_text(new_map_text)
+        return new_map_text
+
+    def update(self):
+        """Redraw all non-edit widgets."""
+        self.turn_widget.set_text('TURN: ' + str(self.game.world.turn))
+        self.log_widget.set_text(self.game.log_text)
+        self.map_widget.set_text(self.draw_map())
 
     class EditToSocketWidget(urwid.Edit):
         """Extends urwid.Edit with socket to send input on 'enter' to."""
@@ -186,10 +187,8 @@ class PlomRogueClient:
         self.socket = socket
         self.widget_manager = WidgetManager(self.socket, self.game)
         self.server_output = []
-        palette = [('foo', 'white', 'dark red'),
-                   ('bar', 'white', 'dark blue'),
-                   ('baz', 'white', 'dark green')]
-        self.urwid_loop = urwid.MainLoop(self.widget_manager.top, palette)
+        self.urwid_loop = urwid.MainLoop(self.widget_manager.top,
+                                         self.widget_manager.palette)
         self.urwid_pipe_write_fd = self.urwid_loop.watch_pipe(self.
                                                               handle_input)
         self.recv_loop_thread = threading.Thread(target=self.recv_loop)
