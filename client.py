@@ -17,7 +17,7 @@ class MapSquare(game_common.Map):
             limit = start_cut + self.size[1]
             map_lines += [terrain[start_cut:limit]]
             start_cut = limit
-        return "\n".join(map_lines)
+        return map_lines
 
 
 class MapHex(game_common.Map):
@@ -35,7 +35,7 @@ class MapHex(game_common.Map):
                 y += 1
                 if y % 2 == 0:
                     new_terrain_list += [' ']
-        return ''.join(new_terrain_list)
+        return ''.join(new_terrain_list).split('\n')
 
 
 map_manager = game_common.MapManager(globals())
@@ -100,20 +100,20 @@ class WidgetManager:
         """Set up all urwid widgets we want on the screen."""
         self.game = game
         edit_widget = self.EditToSocketWidget(socket, 'SEND: ')
-        self.map_widget = urwid.Text('', wrap='clip')
+        self.map_widget = self.MapWidget()
         self.turn_widget = urwid.Text('')
         self.log_widget = urwid.Text('')
         edit_map = urwid.AttrMap(edit_widget, 'foo')
         turn_map = urwid.AttrMap(self.turn_widget, 'bar')
         log_map = urwid.AttrMap(self.log_widget, 'baz')
-        widget_pile = urwid.Pile([edit_map,
-                                  urwid.Divider(),
-                                  turn_map,
-                                  urwid.Divider(),
-                                  log_map])
-        widget_columns = urwid.Columns([(20, widget_pile), self.map_widget],
+        widget_pile = urwid.Pile([('pack', edit_map),
+                                  ('pack', urwid.Divider()),
+                                  ('pack', turn_map),
+                                  ('pack', urwid.Divider()),
+                                  ('pack', log_map),
+                                  urwid.SolidFill(fill_char=' ')])
+        self.top = urwid.Columns([(20, widget_pile), self.map_widget],
                                        dividechars=1)
-        self.top = urwid.Filler(widget_columns, valign='top')
         self.palette = [('foo', 'white', 'dark red'),
                         ('bar', 'white', 'dark blue'),
                         ('baz', 'white', 'dark green')]
@@ -124,24 +124,26 @@ class WidgetManager:
         for t in self.game.world.things:
             pos_i = self.game.world.map_.get_position_index(t.position)
             terrain_as_list[pos_i] = self.game.symbol_for_type(t.type_)
-        text = self.game.world.map_.list_terrain_to_lines(terrain_as_list)
-        new_map_text = []
-        for char in text:
-            if char == '.':
-                new_map_text += [('foo', char)]
-            elif char in {'x', 'X', '#'}:
-                new_map_text += [('bar', char)]
-            elif char in {'@', 'm'}:
-                new_map_text += [('baz', char)]
-            else:
-                new_map_text += [char]
-        return new_map_text
+        return self.game.world.map_.list_terrain_to_lines(terrain_as_list)
+        #text = self.game.world.map_.list_terrain_to_lines(terrain_as_list)
+        #new_map_text = []
+        #for char in text:
+        #    if char == '.':
+        #        new_map_text += [('foo', char)]
+        #    elif char in {'x', 'X', '#'}:
+        #        new_map_text += [('bar', char)]
+        #    elif char in {'@', 'm'}:
+        #        new_map_text += [('baz', char)]
+        #    else:
+        #        new_map_text += [char]
+        #return new_map_text
 
     def update(self):
         """Redraw all non-edit widgets."""
         self.turn_widget.set_text('TURN: ' + str(self.game.world.turn))
         self.log_widget.set_text(self.game.log_text)
-        self.map_widget.set_text(self.draw_map())
+        self.map_widget.text = self.draw_map()
+        self.map_widget._invalidate()
 
     class EditToSocketWidget(urwid.Edit):
         """Extends urwid.Edit with socket to send input on 'enter' to."""
@@ -156,6 +158,27 @@ class WidgetManager:
                 return super().keypress(size, key)
             plom_socket_io.send(self.socket, self.edit_text)
             self.edit_text = ''
+
+    class MapWidget(urwid.Widget):
+        _sizing = frozenset(['box'])
+        text = ['']
+
+        def render(self, size, focus=False):
+            maxcol, maxrow = size
+            content = []
+            for y in range(len(self.text)):
+                if y < maxrow:
+                    line = self.text[y]
+                    if len(line) < maxcol:
+                        line = line + '0' * (maxcol - len(line))
+                    else:
+                        line = line[:maxcol]
+                    content += [line.encode('utf-8')]
+            padding_y = maxrow - len(content)
+            if padding_y > 0:
+                for y in range(padding_y):
+                    content += ['0'.encode('utf-8') * maxcol]
+            return urwid.TextCanvas(content)
 
 
 class PlomRogueClient:
