@@ -206,6 +206,7 @@ class Game(game_common.CommonCommandsMixin):
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
                                               stringify_yx(thing.position)))
+        self.io.send('VISIBLE_MAP_COMPLETE')
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.

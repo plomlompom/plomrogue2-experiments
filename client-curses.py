@@ -56,7 +56,8 @@ class World(game_common.World):
 
 class Game(game_common.CommonCommandsMixin):
 
-    def __init__(self):
+    def __init__(self, tui):
+        self.tui = tui
         self.map_manager = map_manager
         self.parser = Parser(self)
         self.world = World(self)
@@ -77,6 +78,7 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_LAST_PLAYER_TASK_RESULT(self, msg):
         if msg != "success":
             self.log(msg)
+            self.tui.log.do_update = True
     cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
 
     def cmd_TURN_FINISHED(self, n):
@@ -87,12 +89,16 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_NEW_TURN(self, n):
         """Set self.turn to n, empty self.things."""
         self.world.turn = n
+        self.tui.turn.do_update = True
         self.world.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
     def cmd_VISIBLE_MAP_LINE(self, y, terrain_line):
         self.world.map_.set_line(y, terrain_line)
     cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
+
+    def cmd_VISIBLE_MAP_COMPLETE(self):
+        self.tui.map_.do_update = True
 
 
 ASCII_printable = ' !"#$%&\'\(\)*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWX'\
@@ -114,7 +120,7 @@ class Widget:
         self.win = curses.newwin(1, 1, self.start[0], self.start[1])
         self.size_def = size  # store for re-calling .size on SIGWINCH
         self.size = size
-        self.update = True
+        self.do_update = True
 
     @property
     def size(self):
@@ -142,10 +148,7 @@ class Widget:
                 part_string = part[0]
                 attr = part[1]
             if len(part_string) > 0:
-                chars_with_attrs = []
-                for char in part_string:
-                   chars_with_attrs += [(char, attr)]
-                return chars_with_attrs
+                return [(char, attr) for char in part_string]
             elif len(part_string) == 1:
                 return [part]
             return []
@@ -227,7 +230,6 @@ class MapWidget(Widget):
                 text_as_list += [(c, curses.color_pair(3))]
             else:
                 text_as_list += [c]
-        #self.safe_write(''.join(to_join))
         self.safe_write(text_as_list)
 
 
@@ -241,14 +243,15 @@ class TUI:
 
     def __init__(self, server_output):
         self.server_output = server_output
-        self.game = Game()
+        self.game = Game(self)
         self.parser = Parser(self.game)
+        self.do_update = True
         curses.wrapper(self.loop)
 
     def setup_screen(self, stdscr):
         self.stdscr = stdscr
         self.stdscr.refresh()  # will be called by getkey else, clearing screen
-        self.stdscr.timeout(10)
+        self.stdscr.timeout(1)
         self.stdscr.addstr(0, 0, 'SEND:')
         self.stdscr.addstr(2, 0, 'TURN:')
 
@@ -259,36 +262,35 @@ class TUI:
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
         curses.curs_set(False)  # hide cursor
         self.to_send = []
-        edit_line = EditWidget(self, (0, 6), (1, 14))
-        turn_line = TurnWidget(self, (2, 6), (1, 14))
-        log_display = LogWidget(self, (4, 0), (None, 20))
-        map_view = MapWidget(self, (0, 21), (None, None))
-        map_view.update = True
-        widgets = [edit_line, turn_line, log_display, map_view]
-        do_update = True
+        self.edit = EditWidget(self, (0, 6), (1, 14))
+        self.turn = TurnWidget(self, (2, 6), (1, 14))
+        self.log = LogWidget(self, (4, 0), (None, 20))
+        self.map_ = MapWidget(self, (0, 21), (None, None))
+        widgets = (self.edit, self.turn, self.log, self.map_)
         while True:
-            if do_update:
-                for w in widgets:
+            for w in widgets:
+                if w.do_update:
                     w.draw_and_refresh()
-                do_update = False
+                    w.do_update = False
             try:
                 key = self.stdscr.getkey()
-                do_update = True
                 if len(key) == 1 and key in ASCII_printable and \
-                        len(self.to_send) < len(edit_line):
+                        len(self.to_send) < len(self.edit):
                     self.to_send += [key]
+                    self.edit.do_update = True
                 elif key == 'KEY_BACKSPACE':
                     self.to_send[:] = self.to_send[:-1]
+                    self.edit.do_update = True
                 elif key == '\n':
                     plom_socket_io.send(s, ''.join(self.to_send))
                     self.to_send[:] = []
+                    self.edit.do_update = True
                 elif key == 'KEY_RESIZE':
                     curses.endwin()
                     self.setup_screen(curses.initscr())
                     for w in widgets:
                         w.size = w.size_def
-                else:
-                    do_update = False
+                        w.do_update = True
             except curses.error:
                 pass
             if len(self.server_output) > 0:
@@ -296,7 +298,7 @@ class TUI:
                 if do_quit:
                     break
                 self.server_output[:] = []
-                do_update = True
+                self.do_update = True
 
     def handle_input(self, msg):
         if msg == 'BYE':
@@ -305,10 +307,12 @@ class TUI:
             command = self.parser.parse(msg)
             if command is None:
                 self.game.log('UNHANDLED INPUT: ' + msg)
+                self.log.do_update = True
             else:
                 command()
         except ArgError as e:
                 self.game.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
+                self.log.do_update = True
         return False
 
 
