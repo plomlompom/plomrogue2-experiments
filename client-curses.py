@@ -88,12 +88,32 @@ class World(game_common.World):
 
 class Game(game_common.CommonCommandsMixin):
 
-    def __init__(self, tui):
-        self.tui = tui
+    def __init__(self):
         self.map_manager = map_manager
         self.parser = Parser(self)
         self.world = World(self)
         self.log_text = ''
+        self.to_update = {
+            'log': False,
+            'map': False,
+            'turn': False,
+            }
+        self.do_quit = False
+
+    def handle_input(self, msg):
+        if msg == 'BYE':
+            self.do_quit = True
+            return
+        try:
+            command = self.parser.parse(msg)
+            if command is None:
+                self.log('UNHANDLED INPUT: ' + msg)
+                self.to_update['log'] = True
+            else:
+                command()
+        except ArgError as e:
+                self.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
+                self.to_update['log'] = True
 
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
@@ -110,7 +130,7 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_LAST_PLAYER_TASK_RESULT(self, msg):
         if msg != "success":
             self.log(msg)
-            self.tui.log.do_update = True
+            self.to_update['log'] = True
     cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
 
     def cmd_TURN_FINISHED(self, n):
@@ -133,24 +153,24 @@ class Game(game_common.CommonCommandsMixin):
     cmd_PLAYER_POS.argtypes = 'yx_tuple:pos'
 
     def cmd_GAME_STATE_COMPLETE(self):
-        self.tui.turn.do_update = True
-        self.tui.map_.do_update = True
+        self.to_update['turn'] = True
+        self.to_update['map'] = True
 
 
 ASCII_printable = ' !"#$%&\'\(\)*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWX'\
                   'YZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~'
 
 
-def recv_loop(server_output):
+def recv_loop(socket, game):
     for msg in plom_socket_io.recv(s):
-        while len(server_output) > 0:
-            pass
-        server_output += [msg]
+        game.handle_input(msg)
 
 
 class Widget:
 
-    def __init__(self, tui, start, size):
+    def __init__(self, tui, start, size, check_game=[], check_tui=[]):
+        self.check_game = check_game
+        self.check_tui = check_tui
         self.tui = tui
         self.start = start
         self.win = curses.newwin(1, 1, self.start[0], self.start[1])
@@ -209,10 +229,21 @@ class Widget:
             for char_with_attr in cut:
                 self.win.addstr(char_with_attr[0], char_with_attr[1])
 
-    def draw_and_refresh(self):
-        self.win.erase()
-        self.draw()
-        self.win.refresh()
+    def ensure_freshness(self, do_refresh=False):
+        if not do_refresh:
+            for key in self.check_game:
+                if self.tui.game.to_update[key]:
+                    do_refresh = True
+                    break
+        if not do_refresh:
+            for key in self.check_tui:
+                if self.tui.to_update[key]:
+                    do_refresh = True
+                    break
+        if do_refresh:
+            self.win.erase()
+            self.draw()
+            self.win.refresh()
 
 
 class EditWidget(Widget):
@@ -278,17 +309,17 @@ class TurnWidget(Widget):
 
 class TUI:
 
-    def __init__(self, server_output):
-        self.server_output = server_output
-        self.game = Game(self)
+    def __init__(self, socket, game):
+        self.socket = socket
+        self.game = game
         self.parser = Parser(self.game)
-        self.do_update = True
+        self.to_update = {'edit': False}
         curses.wrapper(self.loop)
 
     def setup_screen(self, stdscr):
         self.stdscr = stdscr
         self.stdscr.refresh()  # will be called by getkey else, clearing screen
-        self.stdscr.timeout(1)
+        self.stdscr.timeout(10)
         self.stdscr.addstr(0, 0, 'SEND:')
         self.stdscr.addstr(2, 0, 'TURN:')
 
@@ -299,62 +330,45 @@ class TUI:
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
         curses.curs_set(False)  # hide cursor
         self.to_send = []
-        self.edit = EditWidget(self, (0, 6), (1, 14))
-        self.turn = TurnWidget(self, (2, 6), (1, 14))
-        self.log = LogWidget(self, (4, 0), (None, 20))
-        self.map_ = MapWidget(self, (0, 21), (None, None))
+        self.edit = EditWidget(self, (0, 6), (1, 14), check_tui = ['edit'])
+        self.turn = TurnWidget(self, (2, 6), (1, 14), ['turn'])
+        self.log = LogWidget(self, (4, 0), (None, 20), ['log'])
+        self.map_ = MapWidget(self, (0, 21), (None, None), ['map'])
         widgets = (self.edit, self.turn, self.log, self.map_)
         while True:
             for w in widgets:
-                if w.do_update:
-                    w.draw_and_refresh()
-                    w.do_update = False
+                w.ensure_freshness()
+            for key in self.game.to_update:
+                self.game.to_update[key] = False
+            for key in self.to_update:
+                self.to_update[key] = False
             try:
                 key = self.stdscr.getkey()
                 if len(key) == 1 and key in ASCII_printable and \
                         len(self.to_send) < len(self.edit):
                     self.to_send += [key]
-                    self.edit.do_update = True
+                    self.to_update['edit'] = True
                 elif key == 'KEY_BACKSPACE':
                     self.to_send[:] = self.to_send[:-1]
-                    self.edit.do_update = True
+                    self.to_update['edit'] = True
                 elif key == '\n':
-                    plom_socket_io.send(s, ''.join(self.to_send))
+                    plom_socket_io.send(self.socket, ''.join(self.to_send))
                     self.to_send[:] = []
-                    self.edit.do_update = True
+                    self.to_update['edit'] = True
                 elif key == 'KEY_RESIZE':
                     curses.endwin()
                     self.setup_screen(curses.initscr())
                     for w in widgets:
                         w.size = w.size_def
-                        w.do_update = True
+                        w.ensure_freshness(True)
             except curses.error:
                 pass
-            if len(self.server_output) > 0:
-                do_quit = self.handle_input(self.server_output[0])
-                if do_quit:
-                    break
-                self.server_output[:] = []
-                self.do_update = True
-
-    def handle_input(self, msg):
-        if msg == 'BYE':
-            return True
-        try:
-            command = self.parser.parse(msg)
-            if command is None:
-                self.game.log('UNHANDLED INPUT: ' + msg)
-                self.log.do_update = True
-            else:
-                command()
-        except ArgError as e:
-                self.game.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
-                self.log.do_update = True
-        return False
+            if self.game.do_quit:
+                break
 
 
-server_output = []
 s = socket.create_connection(('127.0.0.1', 5000))
-t = threading.Thread(target=recv_loop, args=(server_output,))
+game = Game()
+t = threading.Thread(target=recv_loop, args=(s, game))
 t.start()
-TUI(server_output)
+TUI(s, game)
