@@ -2,6 +2,7 @@ import sys
 sys.path.append('../')
 import game_common
 import server_.map_
+from parser import ArgError
 
 
 class GameError(Exception):
@@ -206,7 +207,9 @@ class Game(game_common.CommonCommandsMixin):
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
                                               stringify_yx(thing.position)))
-        self.io.send('VISIBLE_MAP_COMPLETE')
+        player = self.world.get_player()
+        self.io.send('PLAYER_POS %s' % (stringify_yx(player.position)))
+        self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):
         """Send turn finish signal, run game world, send new world data.
@@ -272,7 +275,7 @@ class Game(game_common.CommonCommandsMixin):
         self.proceed()
 
     def cmd_GET_GAMESTATE(self, connection_id):
-        """Send game state jto caller."""
+        """Send game state to caller."""
         self.send_gamestate(connection_id)
 
     def cmd_ECHO(self, msg, connection_id):

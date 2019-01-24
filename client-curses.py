@@ -9,7 +9,7 @@ import game_common
 
 class MapSquare(game_common.Map):
 
-    def list_terrain_to_lines(self, terrain_as_list):
+    def list_terrain_to_lines(self, terrain_as_list, center, size):
         terrain = ''.join(terrain_as_list)
         map_lines = []
         start_cut = 0
@@ -17,12 +17,27 @@ class MapSquare(game_common.Map):
             limit = start_cut + self.size[1]
             map_lines += [terrain[start_cut:limit]]
             start_cut = limit
+        if len(map_lines) > size[0] and center[0] > size[0] / 2:
+            diff = len(map_lines) - size[0]
+            if center[0] > len(map_lines) - size[0] / 2:
+                map_lines = map_lines[diff:]
+            else:
+                start = center[0] - int(size[0] / 2)
+                map_lines = map_lines[start:start + size[0]]
+        if self.size[1] > size[1] and center[1] > size[1] / 2:
+            if center[1] > self.size[1] - size[1] / 2:
+                cut_start = self.size[1] - size[1]
+                cut_end = None
+            else:
+                cut_start = center[1] - int(size[1] / 2)
+                cut_end = cut_start + size[1]
+            map_lines = [line[cut_start:cut_end] for line in map_lines]
         return map_lines
 
 
 class MapHex(game_common.Map):
 
-    def list_terrain_to_lines(self, terrain_as_list):
+    def list_terrain_to_lines(self, terrain_as_list, center, size):
         new_terrain_list = [' ']
         x = 0
         y = 0
@@ -35,7 +50,23 @@ class MapHex(game_common.Map):
                 y += 1
                 if y % 2 == 0:
                     new_terrain_list += [' ']
-        return ''.join(new_terrain_list).split('\n')
+        map_lines = ''.join(new_terrain_list).split('\n')
+        if len(map_lines) > size[0] and center[0] > size[0] / 2:
+            diff = len(map_lines) - size[0]
+            if center[0] > len(map_lines) - size[0] / 2:
+                map_lines = map_lines[diff:]
+            else:
+                start = center[0] - int(size[0] / 2)
+                map_lines = map_lines[start:start + size[0]]
+        if self.size[1]*2 > size[1] and center[1]*4 > size[1]:
+            if center[1]*2 > self.size[1]*2 - size[1] / 2:
+                cut_start = self.size[1] * 2 - size[1]
+                cut_end = None
+            else:
+                cut_start = center[1]*2 - int(size[1] / 2)
+                cut_end = cut_start + size[1]
+            map_lines = [line[cut_start:cut_end] for line in map_lines]
+        return map_lines
 
 
 map_manager = game_common.MapManager(globals())
@@ -52,6 +83,7 @@ class World(game_common.World):
         super().__init__(*args, **kwargs)
         self.game = game
         self.map_ = self.game.map_manager.get_map_class('Hex')()
+        self.player_position = (0, 0)
 
 
 class Game(game_common.CommonCommandsMixin):
@@ -89,7 +121,6 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_NEW_TURN(self, n):
         """Set self.turn to n, empty self.things."""
         self.world.turn = n
-        self.tui.turn.do_update = True
         self.world.things = []
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
@@ -97,7 +128,12 @@ class Game(game_common.CommonCommandsMixin):
         self.world.map_.set_line(y, terrain_line)
     cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
-    def cmd_VISIBLE_MAP_COMPLETE(self):
+    def cmd_PLAYER_POS(self, yx):
+        self.world.player_position = yx
+    cmd_PLAYER_POS.argtypes = 'yx_tuple:pos'
+
+    def cmd_GAME_STATE_COMPLETE(self):
+        self.tui.turn.do_update = True
         self.tui.map_.do_update = True
 
 
@@ -208,7 +244,8 @@ class MapWidget(Widget):
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
                 terrain_as_list[pos_i] = self.tui.game.symbol_for_type(t.type_)
-            lines = self.tui.game.world.map_.list_terrain_to_lines(terrain_as_list)
+            center = self.tui.game.world.player_position
+            lines = self.tui.game.world.map_.list_terrain_to_lines(terrain_as_list, center, self.size)
             line_width = self.size[1]
             for line in lines:
                 if line_width > len(line):
