@@ -205,9 +205,9 @@ class MapWidget(Widget):
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
                 terrain_as_list[pos_i] = self.tui.game.symbol_for_type(t.type_)
-            text = self.tui.game.world.map_.list_terrain_to_lines(terrain_as_list)
+            lines = self.tui.game.world.map_.list_terrain_to_lines(terrain_as_list)
             line_width = self.size[1]
-            for line in text:
+            for line in lines:
                 if line_width > len(line):
                     to_pad = line_width - (len(line) % line_width)
                     to_join += [line + '0' * to_pad]
@@ -216,7 +216,19 @@ class MapWidget(Widget):
         if len(to_join) < self.size[0]:
             to_pad = self.size[0] - len(to_join)
             to_join += to_pad * ['0' * self.size[1]]
-        self.safe_write(''.join(to_join))
+        text = ''.join(to_join)
+        text_as_list = []
+        for c in text:
+            if c in {'@', 'm'}:
+                text_as_list += [(c, curses.color_pair(1))]
+            elif c == '.':
+                text_as_list += [(c, curses.color_pair(2))]
+            elif c in {'x', 'X', '#'}:
+                text_as_list += [(c, curses.color_pair(3))]
+            else:
+                text_as_list += [c]
+        #self.safe_write(''.join(to_join))
+        self.safe_write(text_as_list)
 
 
 class TurnWidget(Widget):
