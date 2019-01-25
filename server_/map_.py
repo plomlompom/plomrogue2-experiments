@@ -2,6 +2,7 @@ import sys
 sys.path.append('../')
 import game_common
 import server_.game
+import fractions
 
 
 class Map(game_common.Map):
@@ -170,7 +171,7 @@ class MapFovHex(MapHex):
                     self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
-        step_size = (CIRCLE/6)/distance_to_center
+        step_size = fractions.Fraction(CIRCLE, 6) / distance_to_center
         number_steps = dir_i * distance_to_center + dir_progress
         left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
         right_arm = correct_arm(left_arm - step_size)
@@ -288,7 +289,7 @@ class MapFovSquare(MapSquare):
                     self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
-        step_size = (CIRCLE/4)/distance_to_center
+        step_size = fractions.Fraction(CIRCLE, 4) / distance_to_center
         number_steps = dir_i * distance_to_center + dir_progress
         left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
         right_arm = correct_arm(left_arm - step_size)
