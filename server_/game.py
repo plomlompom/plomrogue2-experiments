@@ -83,10 +83,12 @@ class Task:
                 direction = self.kwargs['direction']
             test_pos = self.thing.world.map_.move(self.thing.position, direction)
             if self.thing.world.map_[test_pos] != '.':
-                raise GameError('would move into illegal terrain')
+                raise GameError(str(self.thing.id_) +
+                                ' would move into illegal terrain')
             for t in self.thing.world.things:
                 if t.position == test_pos:
-                    raise GameError('would move into other thing')
+                    raise GameError(str(self.thing.id_) +
+                                    ' would move into other thing')
 
 
 class Thing(game_common.Thing):
@@ -104,16 +106,7 @@ class Thing(game_common.Thing):
         self.position = self.world.map_.move(self.position, direction)
         return 'success'
 
-    def decide_task(self):
-        visible_things = self.get_visible_things()
-        target = None
-        for t in visible_things:
-            if t.type_ == 'human':
-                target = t.position
-                break
-        if target is None:
-            self.set_task('wait')
-            return
+    def move_towards_target(self, target):
         dijkstra_map = type(self.world.map_)(self.world.map_.size)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
@@ -162,8 +155,21 @@ class Thing(game_common.Thing):
         if direction:
             self.set_task('move', direction=direction)
             #self.world.game.io.send('would move ' + direction)
-        else:
-            self.set_task('wait')
+
+    def decide_task(self):
+        visible_things = self.get_visible_things()
+        target = None
+        for t in visible_things:
+            if t.type_ == 'human':
+                target = t.position
+                break
+        if target is not None:
+            try:
+                self.move_towards_target(target)
+                return
+            except GameError:
+                pass
+        self.set_task('wait')
 
 
     def set_task(self, task_name, *args, **kwargs):
@@ -189,7 +195,10 @@ class Thing(game_common.Thing):
             self.task = None
             self.last_task_result = e
             if is_AI:
-                self.decide_task()
+                try:
+                    self.decide_task()
+                except GameError:
+                    self.set_task('wait')
             return
         self.task.todo -= 1
         if self.task.todo <= 0:
@@ -197,7 +206,10 @@ class Thing(game_common.Thing):
             self.last_task_result = task(*self.task.args, **self.task.kwargs)
             self.task = None
         if is_AI and self.task is None:
-            self.decide_task()
+            try:
+                self.decide_task()
+            except GameError:
+                self.set_task('wait')
 
     def get_stencil(self):
         if self._stencil is not None:
