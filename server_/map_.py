@@ -262,13 +262,15 @@ class MapFovSquare(MapSquare):
         def merge_cone(new_cone):
             for old_cone in self.shadow_cones:
                 if new_cone[0] > old_cone[0] and \
-                    new_cone[1] <= old_cone[0]:
+                    (new_cone[1] < old_cone[0] or
+                     math.isclose(new_cone[1], old_cone[0])):
                     #print('DEBUG merging to', old_cone)
                     old_cone[0] = new_cone[0]
                     #print('DEBUG merged cone:', old_cone)
                     return True
                 if new_cone[1] < old_cone[1] and \
-                    new_cone[0] >= old_cone[1]:
+                    (new_cone[0] > old_cone[1] or
+                     math.isclose(new_cone[0], old_cone[1])):
                     #print('DEBUG merging to', old_cone)
                     old_cone[1] = new_cone[1]
                     #print('DEBUG merged cone:', old_cone)
@@ -290,7 +292,7 @@ class MapFovSquare(MapSquare):
                     self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
-        step_size = fractions.Fraction(CIRCLE, 4) / distance_to_center
+        step_size = (CIRCLE/4) / distance_to_center
         number_steps = dir_i * distance_to_center + dir_progress
         left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
         right_arm = correct_arm(left_arm - step_size)
