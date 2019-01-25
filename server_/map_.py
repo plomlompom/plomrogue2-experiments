@@ -12,7 +12,10 @@ class Map(game_common.Map):
 
     def __setitem__(self, yx, c):
         pos_i = self.get_position_index(yx)
-        self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
+        if type(c) == str:
+            self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
+        else:
+            self.terrain[pos_i] = c
 
     def __iter__(self):
         """Iterate over YX position coordinates."""
@@ -97,15 +100,43 @@ class MapHex(Map):
 
     def move_DOWNLEFT(self, start_pos):
         if start_pos[0] % 2 == 1:
-            return [start_pos[0] + 1, start_pos[1] - 1]
+             return [start_pos[0] + 1, start_pos[1] - 1]
         else:
-            return [start_pos[0] + 1, start_pos[1]]
+               return [start_pos[0] + 1, start_pos[1]]
 
     def move_DOWNRIGHT(self, start_pos):
         if start_pos[0] % 2 == 1:
             return [start_pos[0] + 1, start_pos[1]]
         else:
             return [start_pos[0] + 1, start_pos[1] + 1]
+
+    def get_neighbors(self, pos):
+        # DOWNLEFT, DOWNRIGHT, LEFT, RIGHT, UPLEFT, UPRIGHT (alphabetically)
+        neighbors = [None, None, None, None, None, None]  # e, d, c, x, s, w
+        if pos[1] > 0:
+            neighbors[2] = [pos[0], pos[1] - 1]
+        if pos[1] < self.size[1] - 1:
+            neighbors[3] = [pos[0], pos[1] + 1]
+        # x, c, s, d, w, e  # 3->0, 2->1, 5->4, 0->5
+        if pos[0] % 2 == 1:
+            if pos[0] > 0 and pos[1] > 0:
+                neighbors[4] = [pos[0] - 1, pos[1] - 1]
+            if pos[0] < self.size[0] - 1 and pos[1] > 0:
+                neighbors[0] = [pos[0] + 1, pos[1] - 1]
+            if pos[0] > 0:
+                neighbors[5] = [pos[0] - 1, pos[1]]
+            if pos[0] < self.size[0] - 1:
+                neighbors[1] = [pos[0] + 1, pos[1]]
+        else:
+            if pos[0] > 0 and pos[1] < self.size[1] - 1:
+                neighbors[5] = [pos[0] - 1, pos[1] + 1]
+            if pos[0] < self.size[0] - 1 and pos[1] < self.size[1] - 1:
+                neighbors[1] = [pos[0] + 1, pos[1] + 1]
+            if pos[0] > 0:
+                neighbors[4] = [pos[0] - 1, pos[1]]
+            if pos[0] < self.size[0] - 1:
+                neighbors[0] = [pos[0] + 1, pos[1]]
+        return neighbors
 
 
 class MapFovHex(MapHex):
@@ -230,6 +261,19 @@ class MapSquare(Map):
 
     def move_DOWN(self, start_pos):
         return [start_pos[0] + 1, start_pos[1]]
+
+    def get_neighbors(self, pos):
+        # DOWN, LEFT, RIGHT, UP  (alphabetically)
+        neighbors = [None, None, None, None]
+        if pos[0] > 0:
+            neighbors[3] = [pos[0] - 1, pos[1]]
+        if pos[1] > 0:
+            neighbors[1] = [pos[0], pos[1] - 1]
+        if pos[0] < self.size[0] - 1:
+            neighbors[0] = [pos[0] + 1, pos[1]]
+        if pos[1] < self.size[1] - 1:
+            neighbors[2] = [pos[0], pos[1] + 1]
+        return neighbors
 
 
 class MapFovSquare(MapSquare):

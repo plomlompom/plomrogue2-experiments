@@ -105,16 +105,70 @@ class Thing(game_common.Thing):
         return 'success'
 
     def decide_task(self):
-        #if self.position[1] > 1:
-        #    self.set_task('move', 'LEFT')
-        #elif self.position[1] < 3:
-        #    self.set_task('move', 'RIGHT')
-        #else:
-        self.set_task('wait')
+        visible_things = self.get_visible_things()
+        target = None
+        for t in visible_things:
+            if t.type_ == 'human':
+                target = t.position
+                break
+        if target is None:
+            self.set_task('wait')
+            return
+        dijkstra_map = type(self.world.map_)(self.world.map_.size)
+        n_max = 256
+        dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
+        dijkstra_map[target] = 0
+        shrunk = True
+        while shrunk:
+            shrunk = False
+            for pos in dijkstra_map:
+                if self.world.map_[pos] != '.':
+                    continue
+                neighbors = dijkstra_map.get_neighbors(pos)
+                for yx in neighbors:
+                    if yx is not None and dijkstra_map[yx] < dijkstra_map[pos] - 1:
+                        dijkstra_map[pos] = dijkstra_map[yx] + 1
+                        shrunk = True
+        #with open('log', 'a') as f:
+        #    f.write('---------------------------------\n')
+        #    for y, line in dijkstra_map.lines():
+        #        for val in line:
+        #            if val < 10:
+        #                f.write(str(val))
+        #            elif val == 256:
+        #                f.write('x')
+        #            else:
+        #                f.write('~')
+        #        f.write('\n')
+        neighbors = dijkstra_map.get_neighbors(self.position)
+        n = n_max
+        dirs = dijkstra_map.get_directions()
+        #print('DEBUG dirs', dirs)
+        #print('DEBUG neighbors', neighbors)
+        #debug_scores = []
+        #for pos in neighbors:
+        #    if pos is None:
+        #        debug_scores += [9000]
+        #    else:
+        #        debug_scores += [dijkstra_map[pos]]
+        #print('DEBUG debug_scores', debug_scores)
+        direction = None
+        for i_dir in range(len(neighbors)):
+            pos = neighbors[i_dir]
+            if pos is not None and dijkstra_map[pos] < n:
+                n = dijkstra_map[pos]
+                direction = dirs[i_dir]
+        #print('DEBUG result', direction)
+        if direction:
+            self.set_task('move', direction=direction)
+            #self.world.game.io.send('would move ' + direction)
+        else:
+            self.set_task('wait')
+
 
     def set_task(self, task_name, *args, **kwargs):
         self.task = Task(self, task_name, args, kwargs)
-        self.task.check()
+        self.task.check()  # will throw GameError if necessary
 
     def proceed(self, is_AI=True):
         """Further the thing in its tasks.
