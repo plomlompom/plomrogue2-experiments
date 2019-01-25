@@ -53,7 +53,7 @@ class MapHex(Map):
     def format_to_view(self, map_string, center, size):
 
         def map_string_to_lines(map_string):
-            map_view_chars = ['+']
+            map_view_chars = ['0']
             x = 0
             y = 0
             for c in map_string:
@@ -64,7 +64,7 @@ class MapHex(Map):
                     x = 0
                     y += 1
                     if y % 2 == 0:
-                        map_view_chars += ['+']
+                        map_view_chars += ['0']
             if y % 2 == 0:
                 map_view_chars = map_view_chars[:-1]
             map_view_chars = map_view_chars[:-1]
@@ -150,6 +150,8 @@ class Game(game_common.CommonCommandsMixin):
         """Set self.turn to n, empty self.things."""
         self.world.turn = n
         self.world.things = []
+        self.to_update['turn'] = False
+        self.to_update['map'] = False
     cmd_NEW_TURN.argtypes = 'int:nonneg'
 
     def cmd_VISIBLE_MAP_LINE(self, y, terrain_line):
