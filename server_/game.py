@@ -335,6 +335,17 @@ class Game(game_common.CommonCommandsMixin):
         self.proceed()
     cmd_MOVE.argtypes = 'string'
 
+    def cmd_SWITCH_PLAYER(self):
+        player = self.world.get_player()
+        player.set_task('wait')
+        thing_ids = [t.id_ for t in self.world.things]
+        player_index = thing_ids.index(player.id_)
+        if player_index == len(thing_ids) - 1:
+            self.world.player_id = thing_ids[0]
+        else:
+            self.world.player_id = thing_ids[player_index + 1]
+        self.proceed()
+
     def cmd_WAIT(self):
         """Set player task to 'wait', finish player turn."""
         self.world.get_player().set_task('wait')
