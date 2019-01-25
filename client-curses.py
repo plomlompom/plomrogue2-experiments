@@ -15,11 +15,10 @@ class Map(game_common.Map):
             if center_y > map_height - view_height / 2:
                 map_lines[:] = map_lines[map_height - view_height:]
             else:
-                start = center_y - int(view_height / 2)
+                start = center_y - int(view_height / 2) - 1
                 map_lines[:] = map_lines[start:start + view_height]
 
-    def x_cut(self, map_lines, center_x, view_width):
-        map_width = len(map_lines[0])
+    def x_cut(self, map_lines, center_x, view_width, map_width):
         if map_width > view_width and center_x > view_width / 2:
             if center_x > map_width - view_width / 2:
                 cut_start = map_width - view_width
@@ -45,7 +44,7 @@ class MapSquare(Map):
 
         map_lines = map_string_to_lines(map_string)
         self.y_cut(map_lines, center[0], size[0])
-        self.x_cut(map_lines, center[1], size[1])
+        self.x_cut(map_lines, center[1], size[1], self.size[1])
         return map_lines
 
 
@@ -54,7 +53,7 @@ class MapHex(Map):
     def format_to_view(self, map_string, center, size):
 
         def map_string_to_lines(map_string):
-            map_view_chars = [' ']
+            map_view_chars = ['+']
             x = 0
             y = 0
             for c in map_string:
@@ -65,12 +64,16 @@ class MapHex(Map):
                     x = 0
                     y += 1
                     if y % 2 == 0:
-                        map_view_chars += [' ']
+                        map_view_chars += ['+']
+            if y % 2 == 0:
+                map_view_chars = map_view_chars[:-1]
+            map_view_chars = map_view_chars[:-1]
             return ''.join(map_view_chars).split('\n')
 
         map_lines = map_string_to_lines(map_string)
         self.y_cut(map_lines, center[0], size[0])
-        self.x_cut(map_lines, center[1] * 2, size[1])
+        map_width = self.size[1] * 2 + 1
+        self.x_cut(map_lines, center[1] * 2, size[1], map_width)
         return map_lines
 
 
