@@ -123,6 +123,7 @@ class Game(game_common.CommonCommandsMixin):
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
+        self.to_update['log'] = True
 
     def symbol_for_type(self, type_):
         symbol = '?'
@@ -135,7 +136,6 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_LAST_PLAYER_TASK_RESULT(self, msg):
         if msg != "success":
             self.log(msg)
-            self.to_update['log'] = True
     cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
 
     def cmd_TURN_FINISHED(self, n):
@@ -359,6 +359,7 @@ class TUI:
         self.log = LogWidget(self, (4, 0), (None, 20), ['log'])
         self.map_ = MapWidget(self, (0, 21), (None, None), ['map'])
         widgets = (self.edit, self.turn, self.log, self.map_)
+        map_mode = False
         while True:
             for w in widgets:
                 w.ensure_freshness()
@@ -368,23 +369,49 @@ class TUI:
                 self.to_update[key] = False
             try:
                 key = self.stdscr.getkey()
-                if len(key) == 1 and key in ASCII_printable and \
-                        len(self.to_send) < len(self.edit):
-                    self.to_send += [key]
-                    self.to_update['edit'] = True
-                elif key == 'KEY_BACKSPACE':
-                    self.to_send[:] = self.to_send[:-1]
-                    self.to_update['edit'] = True
-                elif key == '\n':
-                    plom_socket_io.send(self.socket, ''.join(self.to_send))
-                    self.to_send[:] = []
-                    self.to_update['edit'] = True
-                elif key == 'KEY_RESIZE':
+                if key == 'KEY_RESIZE':
                     curses.endwin()
                     self.setup_screen(curses.initscr())
                     for w in widgets:
                         w.size = w.size_def
                         w.ensure_freshness(True)
+                elif key == '\t':  # Tabulator key.
+                    map_mode = False if map_mode else True
+                elif map_mode:
+                    if type(self.game.world.map_) == MapSquare:
+                        if key == 'a':
+                            plom_socket_io.send(self.socket, 'MOVE LEFT')
+                        elif key == 'd':
+                            plom_socket_io.send(self.socket, 'MOVE RIGHT')
+                        elif key == 'w':
+                            plom_socket_io.send(self.socket, 'MOVE UP')
+                        elif key == 's':
+                            plom_socket_io.send(self.socket, 'MOVE DOWN')
+                    elif type(self.game.world.map_) == MapHex:
+                        if key == 'w':
+                            plom_socket_io.send(self.socket, 'MOVE UPLEFT')
+                        elif key == 'e':
+                            plom_socket_io.send(self.socket, 'MOVE UPRIGHT')
+                        if key == 's':
+                            plom_socket_io.send(self.socket, 'MOVE LEFT')
+                        elif key == 'd':
+                            plom_socket_io.send(self.socket, 'MOVE RIGHT')
+                        if key == 'x':
+                            plom_socket_io.send(self.socket, 'MOVE DOWNLEFT')
+                        elif key == 'c':
+                            plom_socket_io.send(self.socket, 'MOVE DOWNRIGHT')
+                else:
+                    if len(key) == 1 and key in ASCII_printable and \
+                            len(self.to_send) < len(self.edit):
+                        self.to_send += [key]
+                        self.to_update['edit'] = True
+                    elif key == 'KEY_BACKSPACE':
+                        self.to_send[:] = self.to_send[:-1]
+                        self.to_update['edit'] = True
+                    elif key == '\n':  # Return key
+                        plom_socket_io.send(self.socket, ''.join(self.to_send))
+                        self.to_send[:] = []
+                        self.to_update['edit'] = True
             except curses.error:
                 pass
             if self.game.do_quit:
