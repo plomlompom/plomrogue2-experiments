@@ -7,65 +7,70 @@ from parser import ArgError, Parser
 import game_common
 
 
-class MapSquare(game_common.Map):
+class Map(game_common.Map):
 
-    def list_terrain_to_lines(self, terrain_as_list, center, size):
-        terrain = ''.join(terrain_as_list)
-        map_lines = []
-        start_cut = 0
-        while start_cut < len(terrain):
-            limit = start_cut + self.size[1]
-            map_lines += [terrain[start_cut:limit]]
-            start_cut = limit
-        if len(map_lines) > size[0] and center[0] > size[0] / 2:
-            diff = len(map_lines) - size[0]
-            if center[0] > len(map_lines) - size[0] / 2:
-                map_lines = map_lines[diff:]
+    def y_cut(self, map_lines, center_y, view_height):
+        map_height = len(map_lines)
+        if map_height > view_height and center_y > view_height / 2:
+            if center_y > map_height - view_height / 2:
+                map_lines = map_lines[map_height - view_height:]
             else:
-                start = center[0] - int(size[0] / 2)
-                map_lines = map_lines[start:start + size[0]]
-        if self.size[1] > size[1] and center[1] > size[1] / 2:
-            if center[1] > self.size[1] - size[1] / 2:
-                cut_start = self.size[1] - size[1]
+                start = center_y - int(view_height / 2)
+                map_lines[:] = map_lines[start:start + view_height]
+
+    def x_cut(self, map_lines, center_x, view_width):
+        map_width = len(map_lines[0])
+        if map_width > view_width and center_x > view_width / 2:
+            if center_x > map_width - view_width / 2:
+                cut_start = map_width - view_width
                 cut_end = None
             else:
-                cut_start = center[1] - int(size[1] / 2)
-                cut_end = cut_start + size[1]
-            map_lines = [line[cut_start:cut_end] for line in map_lines]
+                cut_start = center_x - int(view_width / 2)
+                cut_end = cut_start + view_width
+            map_lines[:] = [line[cut_start:cut_end] for line in map_lines]
+
+
+class MapSquare(Map):
+
+    def format_to_view(self, map_string, center, size):
+
+        def map_string_to_lines(map_string):
+            map_lines = []
+            start_cut = 0
+            while start_cut < len(map_string):
+                limit = start_cut + self.size[1]
+                map_lines += [map_string[start_cut:limit]]
+                start_cut = limit
+            return map_lines
+
+        map_lines = map_string_to_lines(map_string)
+        self.y_cut(map_lines, center[0], size[0])
+        self.x_cut(map_lines, center[1], size[1])
         return map_lines
 
 
-class MapHex(game_common.Map):
+class MapHex(Map):
 
-    def list_terrain_to_lines(self, terrain_as_list, center, size):
-        new_terrain_list = [' ']
-        x = 0
-        y = 0
-        for c in terrain_as_list:
-            new_terrain_list += [c, ' ']
-            x += 1
-            if x == self.size[1]:
-                new_terrain_list += ['\n']
-                x = 0
-                y += 1
-                if y % 2 == 0:
-                    new_terrain_list += [' ']
-        map_lines = ''.join(new_terrain_list).split('\n')
-        if len(map_lines) > size[0] and center[0] > size[0] / 2:
-            diff = len(map_lines) - size[0]
-            if center[0] > len(map_lines) - size[0] / 2:
-                map_lines = map_lines[diff:]
-            else:
-                start = center[0] - int(size[0] / 2)
-                map_lines = map_lines[start:start + size[0]]
-        if self.size[1]*2 > size[1] and center[1]*4 > size[1]:
-            if center[1]*2 > self.size[1]*2 - size[1] / 2:
-                cut_start = self.size[1] * 2 - size[1]
-                cut_end = None
-            else:
-                cut_start = center[1]*2 - int(size[1] / 2)
-                cut_end = cut_start + size[1]
-            map_lines = [line[cut_start:cut_end] for line in map_lines]
+    def format_to_view(self, map_string, center, size):
+
+        def map_string_to_lines(map_string):
+            map_view_chars = [' ']
+            x = 0
+            y = 0
+            for c in map_string:
+                map_view_chars += [c, ' ']
+                x += 1
+                if x == self.size[1]:
+                    map_view_chars += ['\n']
+                    x = 0
+                    y += 1
+                    if y % 2 == 0:
+                        map_view_chars += [' ']
+            return ''.join(map_view_chars).split('\n')
+
+        map_lines = map_string_to_lines(map_string)
+        self.y_cut(map_lines, center[0], size[0])
+        self.x_cut(map_lines, center[1] * 2, size[1])
         return map_lines
 
 
@@ -94,9 +99,9 @@ class Game(game_common.CommonCommandsMixin):
         self.world = World(self)
         self.log_text = ''
         self.to_update = {
-            'log': False,
-            'map': False,
-            'turn': False,
+            'log': True,
+            'map': True,
+            'turn': True,
             }
         self.do_quit = False
 
@@ -269,36 +274,55 @@ class LogWidget(Widget):
 class MapWidget(Widget):
 
     def draw(self):
-        to_join = []
-        if len(self.tui.game.world.map_.terrain) > 0:
+
+        def terrain_with_objects():
             terrain_as_list = list(self.tui.game.world.map_.terrain[:])
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
                 terrain_as_list[pos_i] = self.tui.game.symbol_for_type(t.type_)
-            center = self.tui.game.world.player_position
-            lines = self.tui.game.world.map_.list_terrain_to_lines(terrain_as_list, center, self.size)
+            return ''.join(terrain_as_list)
+
+        def pad_or_cut_x(lines):
             line_width = self.size[1]
-            for line in lines:
+            for y in range(len(lines)):
+                line = lines[y]
                 if line_width > len(line):
                     to_pad = line_width - (len(line) % line_width)
-                    to_join += [line + '0' * to_pad]
+                    lines[y] = line + '0' * to_pad
                 else:
-                    to_join += [line[:line_width]]
-        if len(to_join) < self.size[0]:
-            to_pad = self.size[0] - len(to_join)
-            to_join += to_pad * ['0' * self.size[1]]
-        text = ''.join(to_join)
-        text_as_list = []
-        for c in text:
-            if c in {'@', 'm'}:
-                text_as_list += [(c, curses.color_pair(1))]
-            elif c == '.':
-                text_as_list += [(c, curses.color_pair(2))]
-            elif c in {'x', 'X', '#'}:
-                text_as_list += [(c, curses.color_pair(3))]
-            else:
-                text_as_list += [c]
-        self.safe_write(text_as_list)
+                    lines[y] = line[:line_width]
+
+        def pad_y(lines):
+            if len(lines) < self.size[0]:
+                to_pad = self.size[0] - len(lines)
+                lines += to_pad * ['0' * self.size[1]]
+
+        def lines_to_colored_chars(lines):
+            chars_with_attrs = []
+            for c in ''.join(lines):
+                if c in {'@', 'm'}:
+                    chars_with_attrs += [(c, curses.color_pair(1))]
+                elif c == '.':
+                    chars_with_attrs += [(c, curses.color_pair(2))]
+                elif c in {'x', 'X', '#'}:
+                    chars_with_attrs += [(c, curses.color_pair(3))]
+                else:
+                    chars_with_attrs += [c]
+            return chars_with_attrs
+
+        if self.tui.game.world.map_.terrain == '':
+            lines = []
+            pad_y(lines)
+            self.safe_write(''.join(lines))
+            return
+
+        terrain_with_objects = terrain_with_objects()
+        center = self.tui.game.world.player_position
+        lines = self.tui.game.world.map_.format_to_view(terrain_with_objects,
+                                                        center, self.size)
+        pad_or_cut_x(lines)
+        pad_y(lines)
+        self.safe_write(lines_to_colored_chars(lines))
 
 
 class TurnWidget(Widget):
