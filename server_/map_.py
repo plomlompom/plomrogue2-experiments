@@ -2,7 +2,7 @@ import sys
 sys.path.append('../')
 import game_common
 import server_.game
-import fractions
+import math
 
 
 class Map(game_common.Map):
@@ -143,13 +143,15 @@ class MapFovHex(MapHex):
         def merge_cone(new_cone):
             for old_cone in self.shadow_cones:
                 if new_cone[0] > old_cone[0] and \
-                    new_cone[1] <= old_cone[0]:
+                    (new_cone[1] < old_cone[0] or
+                     math.isclose(new_cone[1], old_cone[0])):
                     #print('DEBUG merging to', old_cone)
                     old_cone[0] = new_cone[0]
                     #print('DEBUG merged cone:', old_cone)
                     return True
                 if new_cone[1] < old_cone[1] and \
-                    new_cone[0] >= old_cone[1]:
+                    (new_cone[0] > old_cone[1] or
+                     math.isclose(new_cone[0], old_cone[1])):
                     #print('DEBUG merging to', old_cone)
                     old_cone[1] = new_cone[1]
                     #print('DEBUG merged cone:', old_cone)
@@ -157,7 +159,6 @@ class MapFovHex(MapHex):
             return False
 
         def eval_cone(cone):
-            new_cone = [left_arm, right_arm]
             #print('DEBUG CONE', cone, '(', step_size, distance_to_center, number_steps, ')')
             if in_shadow_cone(cone):
                 return
@@ -171,7 +172,7 @@ class MapFovHex(MapHex):
                     self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
-        step_size = fractions.Fraction(CIRCLE, 6) / distance_to_center
+        step_size = (CIRCLE/6) / distance_to_center
         number_steps = dir_i * distance_to_center + dir_progress
         left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
         right_arm = correct_arm(left_arm - step_size)
