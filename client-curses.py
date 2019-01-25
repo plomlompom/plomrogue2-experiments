@@ -13,7 +13,7 @@ class Map(game_common.Map):
         map_height = len(map_lines)
         if map_height > view_height and center_y > view_height / 2:
             if center_y > map_height - view_height / 2:
-                map_lines = map_lines[map_height - view_height:]
+                map_lines[:] = map_lines[map_height - view_height:]
             else:
                 start = center_y - int(view_height / 2)
                 map_lines[:] = map_lines[start:start + view_height]
