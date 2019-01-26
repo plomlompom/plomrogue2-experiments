@@ -68,20 +68,15 @@ class World(game_common.World):
 
 class Task:
 
-    def __init__(self, thing, name, args=(), kwargs={}):
+    def __init__(self, thing, name, args=()):
         self.name = name
         self.thing = thing
         self.args = args
-        self.kwargs = kwargs
         self.todo = 3
 
     def check(self):
-        if self.name == 'move':
-            if len(self.args) > 0:
-                direction = self.args[0]
-            else:
-                direction = self.kwargs['direction']
-            test_pos = self.thing.world.map_.move(self.thing.position, direction)
+        if self.name == 'MOVE':
+            test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
             if self.thing.world.map_[test_pos] != '.':
                 raise GameError(str(self.thing.id_) +
                                 ' would move into illegal terrain')
@@ -95,16 +90,17 @@ class Thing(game_common.Thing):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.task = Task(self, 'wait')
+        self.task = Task(self, 'WAIT')
         self.last_task_result = None
         self._stencil = None
 
-    def task_wait(self):
+    def task_WAIT(self):
         return 'success'
 
-    def task_move(self, direction):
+    def task_MOVE(self, direction):
         self.position = self.world.map_.move(self.position, direction)
         return 'success'
+    task_MOVE.argtypes = 'string:direction'
 
     def move_towards_target(self, target):
         dijkstra_map = type(self.world.map_)(self.world.map_.size)
@@ -153,7 +149,7 @@ class Thing(game_common.Thing):
                 direction = dirs[i_dir]
         #print('DEBUG result', direction)
         if direction:
-            self.set_task('move', direction=direction)
+            self.set_task('MOVE', (direction,))
             #self.world.game.io.send('would move ' + direction)
 
     def decide_task(self):
@@ -169,11 +165,11 @@ class Thing(game_common.Thing):
                 return
             except GameError:
                 pass
-        self.set_task('wait')
+        self.set_task('WAIT')
 
 
-    def set_task(self, task_name, *args, **kwargs):
-        self.task = Task(self, task_name, args, kwargs)
+    def set_task(self, task_name, args=()):
+        self.task = Task(self, task_name, args)
         self.task.check()  # will throw GameError if necessary
 
     def proceed(self, is_AI=True):
@@ -198,18 +194,18 @@ class Thing(game_common.Thing):
                 try:
                     self.decide_task()
                 except GameError:
-                    self.set_task('wait')
+                    self.set_task('WAIT')
             return
         self.task.todo -= 1
         if self.task.todo <= 0:
             task = getattr(self, 'task_' + self.task.name)
-            self.last_task_result = task(*self.task.args, **self.task.kwargs)
+            self.last_task_result = task(*self.task.args)
             self.task = None
         if is_AI and self.task is None:
             try:
                 self.decide_task()
             except GameError:
-                self.set_task('wait')
+                self.set_task('WAIT')
 
     def get_stencil(self):
         if self._stencil is not None:
@@ -324,31 +320,15 @@ class Game(game_common.CommonCommandsMixin):
         self.send_gamestate()
         self.pool_result = self.pool.map_async(fib, (35, 35))
 
-    def cmd_MOVE(self, direction):
-        """Set player task to 'move' with direction arg, finish player turn."""
-        import parser
-        legal_directions = self.world.map_.get_directions()
-        if direction not in legal_directions:
-            raise parser.ArgError('Move argument must be one of: ' +
-                                  ', '.join(legal_directions))
-        self.world.get_player().set_task('move', direction=direction)
-        self.proceed()
-    cmd_MOVE.argtypes = 'string'
-
     def cmd_SWITCH_PLAYER(self):
         player = self.world.get_player()
-        player.set_task('wait')
+        player.set_task('WAIT')
         thing_ids = [t.id_ for t in self.world.things]
         player_index = thing_ids.index(player.id_)
         if player_index == len(thing_ids) - 1:
             self.world.player_id = thing_ids[0]
         else:
             self.world.player_id = thing_ids[player_index + 1]
-        self.proceed()
-
-    def cmd_WAIT(self):
-        """Set player task to 'wait', finish player turn."""
-        self.world.get_player().set_task('wait')
         self.proceed()
 
     def cmd_GET_GAMESTATE(self, connection_id):
@@ -370,9 +350,38 @@ class Game(game_common.CommonCommandsMixin):
     cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
     def cmd_GEN_WORLD(self, geometry, yx, seed):
-        legal_grids = self.map_manager.get_map_geometries()
-        if geometry not in legal_grids:
-            raise ArgError('First map argument must be one of: ' +
-                           ', '.join(legal_grids))
         self.world.make_new(geometry, yx, seed)
-    cmd_GEN_WORLD.argtypes = 'string yx_tuple:pos string'
+    cmd_GEN_WORLD.argtypes = 'string:geometry yx_tuple:pos string'
+
+    def get_command_signature(self, command_name):
+        from functools import partial
+
+        def cmd_TASK_colon(task_name, *args):
+            self.world.get_player().set_task(task_name, args)
+            self.proceed()
+
+        method = None
+        argtypes = ''
+        task_prefix = 'TASK:'
+        if command_name[:len(task_prefix)] == task_prefix:
+            task_name = command_name[len(task_prefix):]
+            task_method_candidate = 'task_' + task_name
+            if hasattr(Thing, task_method_candidate):
+                method = partial(cmd_TASK_colon, task_name)
+                task_method = getattr(Thing, task_method_candidate)
+                if hasattr(task_method, 'argtypes'):
+                    argtypes = task_method.argtypes
+            return method, argtypes
+        method_candidate = 'cmd_' + command_name
+        if hasattr(self, method_candidate):
+            method = getattr(self, method_candidate)
+            if hasattr(method, 'argtypes'):
+                argtypes = method.argtypes
+        return method, argtypes
+
+    def get_string_options(self, string_option_type):
+        if string_option_type == 'geometry':
+            return self.map_manager.get_map_geometries()
+        elif string_option_type == 'direction':
+            return self.world.map_.get_directions()
+        return None

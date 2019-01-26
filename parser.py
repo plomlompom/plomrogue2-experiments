@@ -45,27 +45,25 @@ class Parser:
         return tokens
 
     def parse(self, msg):
-        """Parse msg as call to self.game method, return method with arguments.
+        """Parse msg as call to method, return method with arguments.
 
         Respects method signatures defined in methods' .argtypes attributes.
         """
         tokens = self.tokenize(msg)
         if len(tokens) == 0:
             return None
-        method_candidate = 'cmd_' + tokens[0]
-        if not hasattr(self.game, method_candidate):
+        method, argtypes = self.game.get_command_signature(tokens[0])
+        if method is None:
             return None
-        method = getattr(self.game, method_candidate)
+        if len(argtypes) == 0:
+            if len(tokens) > 1:
+                raise ArgError('Command expects no argument(s).')
+            return method
         if len(tokens) == 1:
-            if not hasattr(method, 'argtypes'):
-                return method
-            else:
-                raise ArgError('Command expects argument(s).')
+            raise ArgError('Command expects argument(s).')
         args_candidates = tokens[1:]
-        if not hasattr(method, 'argtypes'):
-            raise ArgError('Command expects no argument(s).')
-        args, kwargs = self.argsparse(method.argtypes, args_candidates)
-        return partial(method, *args, **kwargs)
+        args = self.argsparse(argtypes, args_candidates)
+        return partial(method, *args)
 
     def parse_yx_tuple(self, yx_string, range_):
         """Parse yx_string as yx_tuple:nonneg argtype, return result.
@@ -93,11 +91,12 @@ class Parser:
         return (y, x)
 
     def argsparse(self, signature, args_tokens):
-        """Parse into / return args_tokens as args/kwargs defined by signature.
+        """Parse into / return args_tokens as args defined by signature.
 
         Expects signature to be a ' '-delimited sequence of any of the strings
         'int:nonneg', 'yx_tuple:nonneg', 'yx_tuple:pos', 'string',
-        'seq:int:nonneg', defining the respective argument types.
+        'seq:int:nonneg', 'string:' + an option type string accepted by
+        self.game.get_string_options, defining the respective argument types.
         """
         tmpl_tokens = signature.split()
         if len(tmpl_tokens) != len(args_tokens):
@@ -105,6 +104,7 @@ class Parser:
                            ') not expected number (' + str(len(tmpl_tokens))
                            + ').')
         args = []
+        string_string = 'string'
         for i in range(len(tmpl_tokens)):
             tmpl = tmpl_tokens[i]
             arg = args_tokens[i]
@@ -116,8 +116,6 @@ class Parser:
                 args += [self.parse_yx_tuple(arg, 'nonneg')]
             elif tmpl == 'yx_tuple:pos':
                 args += [self.parse_yx_tuple(arg, 'pos')]
-            elif tmpl == 'string':
-                args += [arg]
             elif tmpl == 'seq:int:nonneg':
                 sub_tokens = arg.split(',')
                 if len(sub_tokens) < 1:
@@ -129,9 +127,22 @@ class Parser:
                                        'non-negative integers.')
                     seq += [int(tok)]
                 args += [seq]
+            elif tmpl == string_string:
+                args += [arg]
+            elif tmpl[:len(string_string) + 1] == string_string + ':':
+                if not hasattr(self.game, 'get_string_options'):
+                    raise ArgError('No string option directory.')
+                string_option_type = tmpl[len(string_string) + 1:]
+                options = self.game.get_string_options(string_option_type)
+                if options is None:
+                    raise ArgError('Unknown string option type.')
+                if arg not in options:
+                    msg = 'Argument #%s must be one of: %s' % (i + 1, options)
+                    raise ArgError(msg)
+                args += [arg]
             else:
                 raise ArgError('Unknown argument type.')
-        return args, {}
+        return args
 
 
 class TestParser(unittest.TestCase):
@@ -156,7 +167,6 @@ class TestParser(unittest.TestCase):
         self.assertEqual(p.parse('x'), None)
 
     def test_argsparse(self):
-        from functools import partial
         p = Parser()
         assertErr = partial(self.assertRaises, ArgError, p.argsparse)
         assertErr('', ['foo'])

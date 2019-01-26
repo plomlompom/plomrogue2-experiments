@@ -80,12 +80,8 @@ class CommonCommandsMixin:
 
     def cmd_MAP(self, geometry, yx):
         """Create new map of grid geometry, size yx and only '?' cells."""
-        legal_grids = self.map_manager.get_map_geometries()
-        if geometry not in legal_grids:
-            raise ArgError('First map argument must be one of: ' +
-                           ', '.join(legal_grids))
         self.world.new_map(geometry, yx)
-    cmd_MAP.argtypes = 'string yx_tuple:pos'
+    cmd_MAP.argtypes = 'string:geometry yx_tuple:pos'
 
     def cmd_THING_TYPE(self, i, type_):
         t = self.world.get_thing(i)

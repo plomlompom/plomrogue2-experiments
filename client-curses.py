@@ -108,6 +108,21 @@ class Game(game_common.CommonCommandsMixin):
             }
         self.do_quit = False
 
+    def get_command_signature(self, command_name):
+        method_candidate = 'cmd_' + command_name
+        method = None
+        argtypes = ''
+        if hasattr(self, method_candidate):
+            method = getattr(self, method_candidate)
+            if hasattr(method, 'argtypes'):
+                argtypes = method.argtypes
+        return method, argtypes
+
+    def get_string_options(self, string_option_type):
+        if string_option_type == 'geometry':
+            return self.map_manager.get_map_geometries()
+        return None
+
     def handle_input(self, msg):
         if msg == 'BYE':
             self.do_quit = True
@@ -120,8 +135,8 @@ class Game(game_common.CommonCommandsMixin):
             else:
                 command()
         except ArgError as e:
-                self.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
-                self.to_update['log'] = True
+            self.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
+            self.to_update['log'] = True
 
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
@@ -385,26 +400,26 @@ class TUI:
                 elif map_mode:
                     if type(self.game.world.map_) == MapSquare:
                         if key == 'a':
-                            plom_socket_io.send(self.socket, 'MOVE LEFT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE LEFT')
                         elif key == 'd':
-                            plom_socket_io.send(self.socket, 'MOVE RIGHT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE RIGHT')
                         elif key == 'w':
-                            plom_socket_io.send(self.socket, 'MOVE UP')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE UP')
                         elif key == 's':
-                            plom_socket_io.send(self.socket, 'MOVE DOWN')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWN')
                     elif type(self.game.world.map_) == MapHex:
                         if key == 'w':
-                            plom_socket_io.send(self.socket, 'MOVE UPLEFT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE UPLEFT')
                         elif key == 'e':
-                            plom_socket_io.send(self.socket, 'MOVE UPRIGHT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE UPRIGHT')
                         if key == 's':
-                            plom_socket_io.send(self.socket, 'MOVE LEFT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE LEFT')
                         elif key == 'd':
-                            plom_socket_io.send(self.socket, 'MOVE RIGHT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE RIGHT')
                         if key == 'x':
-                            plom_socket_io.send(self.socket, 'MOVE DOWNLEFT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWNLEFT')
                         elif key == 'c':
-                            plom_socket_io.send(self.socket, 'MOVE DOWNRIGHT')
+                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWNRIGHT')
                 else:
                     if len(key) == 1 and key in ASCII_printable and \
                             len(self.to_send) < len(self.edit):
