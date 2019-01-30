@@ -118,13 +118,15 @@ class Thing(game_common.Thing):
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
         dijkstra_map[target] = 0
         shrunk = True
+        stencil = self.get_stencil()
         while shrunk:
             shrunk = False
             for pos in dijkstra_map:
-                if self.world.map_[pos] != '.':
+                if stencil[pos] != '.':
                     continue
-                neighbors = dijkstra_map.get_neighbors(pos)
-                for yx in neighbors:
+                neighbors = dijkstra_map.get_neighbors(tuple(pos))
+                for direction in neighbors:
+                    yx = neighbors[direction]
                     if yx is not None and dijkstra_map[yx] < dijkstra_map[pos] - 1:
                         dijkstra_map[pos] = dijkstra_map[yx] + 1
                         shrunk = True
@@ -139,9 +141,10 @@ class Thing(game_common.Thing):
         #            else:
         #                f.write('~')
         #        f.write('\n')
-        neighbors = dijkstra_map.get_neighbors(self.position)
+        neighbors = dijkstra_map.get_neighbors(tuple(self.position))
         n = n_max
-        dirs = dijkstra_map.get_directions()
+        #print('DEBUG', self.position, neighbors)
+        #dirs = dijkstra_map.get_directions()
         #print('DEBUG dirs', dirs)
         #print('DEBUG neighbors', neighbors)
         #debug_scores = []
@@ -151,15 +154,17 @@ class Thing(game_common.Thing):
         #    else:
         #        debug_scores += [dijkstra_map[pos]]
         #print('DEBUG debug_scores', debug_scores)
-        direction = None
-        for i_dir in range(len(neighbors)):
-            pos = neighbors[i_dir]
-            if pos is not None and dijkstra_map[pos] < n:
-                n = dijkstra_map[pos]
-                direction = dirs[i_dir]
+        target_direction = None
+        for direction in neighbors:
+            yx = neighbors[direction]
+            if yx is not None:
+                n_new = dijkstra_map[yx]
+                if n_new < n:
+                    n = n_new
+                    target_direction = direction
         #print('DEBUG result', direction)
-        if direction:
-            self.set_task('MOVE', (direction,))
+        if target_direction:
+            self.set_task('MOVE', (target_direction,))
             #self.world.game.io.send('would move ' + direction)
 
     def decide_task(self):
