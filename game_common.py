@@ -54,13 +54,15 @@ class World:
         self.turn = 0
         self.things = []
 
-    def get_thing(self, id_):
+    def get_thing(self, id_, create_unfound=True):
         for thing in self.things:
             if id_ == thing.id_:
                 return thing
-        t = self.Thing(self, id_)
-        self.things += [t]
-        return t
+        if create_unfound:
+            t = self.Thing(self, id_)
+            self.things += [t]
+            return t
+        return None
 
     def new_map(self, geometry, yx):
         map_type = self.game.map_manager.get_map_class(geometry)

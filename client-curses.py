@@ -128,12 +128,12 @@ class Game(game_common.CommonCommandsMixin):
             self.do_quit = True
             return
         try:
-            command = self.parser.parse(msg)
+            command, args = self.parser.parse(msg)
             if command is None:
                 self.log('UNHANDLED INPUT: ' + msg)
                 self.to_update['log'] = True
             else:
-                command()
+                command(*args)
         except ArgError as e:
             self.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
             self.to_update['log'] = True
@@ -161,13 +161,13 @@ class Game(game_common.CommonCommandsMixin):
         pass
     cmd_TURN_FINISHED.argtypes = 'int:nonneg'
 
-    def cmd_NEW_TURN(self, n):
+    def cmd_TURN(self, n):
         """Set self.turn to n, empty self.things."""
         self.world.turn = n
         self.world.things = []
         self.to_update['turn'] = False
         self.to_update['map'] = False
-    cmd_NEW_TURN.argtypes = 'int:nonneg'
+    cmd_TURN.argtypes = 'int:nonneg'
 
     def cmd_VISIBLE_MAP_LINE(self, y, terrain_line):
         self.world.map_.set_line(y, terrain_line)

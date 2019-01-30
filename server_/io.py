@@ -159,21 +159,21 @@ class GameIO():
                 print(msg)
 
         try:
-            command = self.parser.parse(input_)
+            command, args = self.parser.parse(input_)
             if command is None:
                 answer(connection_id, 'UNHANDLED_INPUT')
             else:
                 if 'connection_id' in list(signature(command).parameters):
-                    command(connection_id=connection_id)
+                    command(*args, connection_id=connection_id)
                 else:
-                    command()
-                    if store:
+                    command(*args)
+                    if store and not hasattr(command, 'dont_save'):
                         with open(self.game_file_name, 'a') as f:
                             f.write(input_ + '\n')
         except parser.ArgError as e:
-            answer(connection_id, 'ARGUMENT_ERROR ' + self.quote(str(e)))
+            answer(connection_id, 'ARGUMENT_ERROR ' + quote(str(e)))
         except server_.game.GameError as e:
-            answer(connection_id, 'GAME_ERROR ' + self.quote(str(e)))
+            answer(connection_id, 'GAME_ERROR ' + quote(str(e)))
 
     def send(self, msg, connection_id=None):
         """Send message msg to server's client(s) via self.queues_out.
@@ -189,14 +189,19 @@ class GameIO():
             for connection_id in self.queues_out:
                 self.queues_out[connection_id].put(msg)
 
-    def quote(self, string):
-        """Quote & escape string so client interprets it as single token."""
-        # FIXME: Don't do this as a method, makes no sense.
-        quoted = []
-        quoted += ['"']
-        for c in string:
-            if c in {'"', '\\'}:
-                quoted += ['\\']
-            quoted += [c]
-        quoted += ['"']
-        return ''.join(quoted)
+
+def quote(string):
+    """Quote & escape string so client interprets it as single token."""
+    quoted = []
+    quoted += ['"']
+    for c in string:
+        if c in {'"', '\\'}:
+            quoted += ['\\']
+        quoted += [c]
+    quoted += ['"']
+    return ''.join(quoted)
+
+
+def stringify_yx(tuple_):
+    """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
+    return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])

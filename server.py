@@ -17,7 +17,7 @@ if os.path.exists(game_file_name):
             lines = f.readlines()
         for i in range(len(lines)):
             line = lines[i]
-            print("FILE INPUT LINE %s: %s" % (i, line), end='')
+            print("FILE INPUT LINE %5s: %s" % (i, line), end='')
             game.io.handle_input(line, store=False)
 else:
     game.io.handle_input('GEN_WORLD Hex Y:16,X:16 bar')

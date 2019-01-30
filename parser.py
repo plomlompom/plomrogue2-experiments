@@ -1,5 +1,4 @@
 import unittest
-from functools import partial
 
 
 class ArgError(Exception):
@@ -45,25 +44,25 @@ class Parser:
         return tokens
 
     def parse(self, msg):
-        """Parse msg as call to method, return method with arguments.
+        """Parse msg as call to function, return function with args tuple.
 
-        Respects method signatures defined in methods' .argtypes attributes.
+        Respects function signature defined in function's .argtypes attribute.
         """
         tokens = self.tokenize(msg)
         if len(tokens) == 0:
-            return None
-        method, argtypes = self.game.get_command_signature(tokens[0])
-        if method is None:
-            return None
+            return None, ()
+        func, argtypes = self.game.get_command_signature(tokens[0])
+        if func is None:
+            return None, ()
         if len(argtypes) == 0:
             if len(tokens) > 1:
                 raise ArgError('Command expects no argument(s).')
-            return method
+            return func, ()
         if len(tokens) == 1:
             raise ArgError('Command expects argument(s).')
         args_candidates = tokens[1:]
         args = self.argsparse(argtypes, args_candidates)
-        return partial(method, *args)
+        return func, args
 
     def parse_yx_tuple(self, yx_string, range_):
         """Parse yx_string as yx_tuple:nonneg argtype, return result.
@@ -167,6 +166,7 @@ class TestParser(unittest.TestCase):
         self.assertEqual(p.parse('x'), None)
 
     def test_argsparse(self):
+        from functools import partial
         p = Parser()
         assertErr = partial(self.assertRaises, ArgError, p.argsparse)
         assertErr('', ['foo'])

@@ -2,6 +2,7 @@ import sys
 sys.path.append('../')
 import game_common
 import server_.map_
+import server_.io
 from parser import ArgError
 
 
@@ -85,13 +86,22 @@ class Task:
                     raise GameError(str(self.thing.id_) +
                                     ' would move into other thing')
 
+    def get_args_string(self):
+        stringed_args = []
+        for arg in self.args:
+            if type(arg) == 'string':
+                stringed_args += [server_.io.quote(arg)]
+            else:
+                raise GameError('stringifying arg type not implemented')
+        return ' '.join(stringed_args)
+
 
 class Thing(game_common.Thing):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.task = Task(self, 'WAIT')
-        self.last_task_result = None
+        self._last_task_result = None
         self._stencil = None
 
     def task_WAIT(self):
@@ -189,7 +199,7 @@ class Thing(game_common.Thing):
             self.task.check()
         except GameError as e:
             self.task = None
-            self.last_task_result = e
+            self._last_task_result = e
             if is_AI:
                 try:
                     self.decide_task()
@@ -199,7 +209,7 @@ class Thing(game_common.Thing):
         self.task.todo -= 1
         if self.task.todo <= 0:
             task = getattr(self, 'task_' + self.task.name)
-            self.last_task_result = task(*self.task.args)
+            self._last_task_result = task(*self.task.args)
             self.task = None
         if is_AI and self.task is None:
             try:
@@ -241,7 +251,6 @@ def fib(n):
 class Game(game_common.CommonCommandsMixin):
 
     def __init__(self, game_file_name):
-        import server_.io
         self.map_manager = server_.map_.map_manager
         self.world = World(self)
         self.io = server_.io.GameIO(game_file_name, self)
@@ -254,23 +263,19 @@ class Game(game_common.CommonCommandsMixin):
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
 
-        def stringify_yx(tuple_):
-            """Transform tuple (y,x) into string 'Y:'+str(y)+',X:'+str(x)."""
-            return 'Y:' + str(tuple_[0]) + ',X:' + str(tuple_[1])
-
-        self.io.send('NEW_TURN ' + str(self.world.turn))
+        self.io.send('TURN ' + str(self.world.turn))
         self.io.send('MAP ' + self.world.map_.geometry +\
-                     ' ' + stringify_yx(self.world.map_.size))
+                     ' ' + server_.io.stringify_yx(self.world.map_.size))
         visible_map = self.world.get_player().get_visible_map()
         for y, line in visible_map.lines():
-            self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, self.io.quote(line)))
+            self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, server_.io.quote(line)))
         visible_things = self.world.get_player().get_visible_things()
         for thing in visible_things:
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
-                                              stringify_yx(thing.position)))
+                                              server_.io.stringify_yx(thing.position)))
         player = self.world.get_player()
-        self.io.send('PLAYER_POS %s' % (stringify_yx(player.position)))
+        self.io.send('PLAYER_POS %s' % (server_.io.stringify_yx(player.position)))
         self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):
@@ -281,8 +286,8 @@ class Game(game_common.CommonCommandsMixin):
         """
         self.io.send('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
-        msg = str(self.world.get_player().last_task_result)
-        self.io.send('LAST_PLAYER_TASK_RESULT ' + self.io.quote(msg))
+        msg = str(self.world.get_player()._last_task_result)
+        self.io.send('LAST_PLAYER_TASK_RESULT ' + server_.io.quote(msg))
         self.send_gamestate()
 
     def cmd_FIB(self, numbers, connection_id):
@@ -300,16 +305,18 @@ class Game(game_common.CommonCommandsMixin):
     def cmd_INC_P(self, connection_id):
         """Increment world.turn, send game turn data to everyone.
 
-        To simulate game processing waiting times, a one second delay between
-        TURN_FINISHED and NEW_TURN occurs; after NEW_TURN, some expensive
-        calculations are started as pool processes that need to be finished
-        until a further INC finishes the turn.
+        To simulate game processing waiting times, a one second delay
+        between TURN_FINISHED and TURN occurs; after TURN, some
+        expensive calculations are started as pool processes that need
+        to be finished until a further INC finishes the turn.
 
-        This is just a demo structure for how the game loop could work when
-        parallelized. One might imagine a two-step game turn, with a non-action
-        step determining actor tasks (the AI determinations would take the
-        place of the fib calculations here), and an action step wherein these
-        tasks are performed (where now sleep(1) is).
+        This is just a demo structure for how the game loop could work
+        when parallelized. One might imagine a two-step game turn,
+        with a non-action step determining actor tasks (the AI
+        determinations would take the place of the fib calculations
+        here), and an action step wherein these tasks are performed
+        (where now sleep(1) is).
+
         """
         from time import sleep
         if self.pool_result is not None:
@@ -360,17 +367,36 @@ class Game(game_common.CommonCommandsMixin):
             self.world.get_player().set_task(task_name, args)
             self.proceed()
 
-        method = None
-        argtypes = ''
-        task_prefix = 'TASK:'
-        if command_name[:len(task_prefix)] == task_prefix:
-            task_name = command_name[len(task_prefix):]
-            task_method_candidate = 'task_' + task_name
-            if hasattr(Thing, task_method_candidate):
-                method = partial(cmd_TASK_colon, task_name)
-                task_method = getattr(Thing, task_method_candidate)
-                if hasattr(task_method, 'argtypes'):
-                    argtypes = task_method.argtypes
+        def cmd_SET_TASK_colon(task_name, thing_id, todo, *args):
+            t = self.world.get_thing(thing_id, False)
+            if t is None:
+                raiseArgError('No such Thing.')
+            t.task = Task(t, task_name, args)
+            t.task.todo = todo
+
+        def task_prefixed(command_name, task_prefix, task_command,
+                          argtypes_prefix=''):
+            method = None
+            argtypes = ''
+            if command_name[:len(task_prefix)] == task_prefix:
+                task_name = command_name[len(task_prefix):]
+                task_method_candidate = 'task_' + task_name
+                if hasattr(Thing, task_method_candidate):
+                    method = partial(task_command, task_name)
+                    task_method = getattr(Thing, task_method_candidate)
+                    if hasattr(task_method, 'argtypes'):
+                        argtypes = task_method.argtypes
+            if method is not None:
+                return method, argtypes_prefix + argtypes
+            return None, argtypes
+
+        method, argtypes = task_prefixed(command_name, 'TASK:', cmd_TASK_colon)
+        if method:
+            return method, argtypes
+        method, argtypes = task_prefixed(command_name, 'SET_TASK:',
+                                         cmd_SET_TASK_colon,
+                                         'int:nonneg int:nonneg')
+        if method:
             return method, argtypes
         method_candidate = 'cmd_' + command_name
         if hasattr(self, method_candidate):
@@ -385,3 +411,35 @@ class Game(game_common.CommonCommandsMixin):
         elif string_option_type == 'direction':
             return self.world.map_.get_directions()
         return None
+
+    def cmd_PLAYER_ID(self, id_):
+        # TODO: test whether valid thing ID
+        self.world.player_id = id_
+    cmd_PLAYER_ID.argtypes = 'int:nonneg'
+
+    def cmd_TURN(self, n):
+        self.world.turn = n
+    cmd_TURN.argtypes = 'int:nonneg'
+
+    def cmd_SAVE(self):
+
+        def write(f, msg):
+            f.write(msg + '\n')
+
+        save_file_name = self.io.game_file_name + '.save'
+        with open(save_file_name, 'w') as f:
+            write(f, 'TURN %s' % self.world.turn)
+            write(f, 'MAP ' + self.world.map_.geometry + ' ' + server_.io.stringify_yx(self.world.map_.size))
+            for y, line in self.world.map_.lines():
+                write(f, 'TERRAIN_LINE %5s %s' % (y, server_.io.quote(line)))
+            for thing in self.world.things:
+                write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
+                write(f, 'THING_POS %s %s' % (thing.id_,
+                                              server_.io.stringify_yx(thing.position)))
+                task = thing.task
+                if task is not None:
+                    task_args = task.get_args_string()
+                    write(f, 'SET_TASK:%s %s %s %s' % (task.name, thing.id_,
+                                                    task.todo, task_args))
+            write(f, 'PLAYER_ID %s' % self.world.player_id)
+    cmd_SAVE.dont_save = True
