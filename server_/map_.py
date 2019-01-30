@@ -139,7 +139,33 @@ class MapHex(Map):
         return neighbors
 
 
-class FovMapHex(MapHex):
+class MapSquare(Map):
+
+    # The following is used nowhere, so not implemented.
+    #def are_neighbors(self, pos_1, pos_2):
+    #    return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
+
+    def move_UP(self, start_pos):
+        return [start_pos[0] - 1, start_pos[1]]
+
+    def move_DOWN(self, start_pos):
+        return [start_pos[0] + 1, start_pos[1]]
+
+    def get_neighbors(self, pos):
+        # DOWN, LEFT, RIGHT, UP  (alphabetically)
+        neighbors = [None, None, None, None]
+        if pos[0] > 0:
+            neighbors[3] = [pos[0] - 1, pos[1]]
+        if pos[1] > 0:
+            neighbors[1] = [pos[0], pos[1] - 1]
+        if pos[0] < self.size[0] - 1:
+            neighbors[0] = [pos[0] + 1, pos[1]]
+        if pos[1] < self.size[1] - 1:
+            neighbors[2] = [pos[0], pos[1] + 1]
+        return neighbors
+
+
+class FovMap:
 
     def __init__(self, source_map, yx):
         self.source_map = source_map
@@ -203,7 +229,7 @@ class FovMapHex(MapHex):
                     self.shadow_cones += [cone]
 
         #print('DEBUG', yx)
-        step_size = (CIRCLE/6) / distance_to_center
+        step_size = (CIRCLE/len(self.circle_out_directions)) / distance_to_center
         number_steps = dir_i * distance_to_center + dir_progress
         left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
         right_arm = correct_arm(left_arm - step_size)
@@ -215,6 +241,15 @@ class FovMapHex(MapHex):
         else:
             eval_cone([left_arm, right_arm])
 
+    def basic_circle_out_move(self, pos, direction):
+        """Move position pos into direction. Return whether still in map."""
+        mover = getattr(self, 'move_' + direction)
+        pos[:] = mover(pos)
+        if pos[0] < 0 or pos[1] < 0 or \
+            pos[0] >= self.size[0] or pos[1] >= self.size[1]:
+            return False
+        return True
+
     def circle_out(self, yx, f):
         # Optimization potential: Precalculate movement positions. (How to check
         # circle_in_map then?)
@@ -223,157 +258,38 @@ class FovMapHex(MapHex):
         # shading implies they completely lie in existing shades; otherwise we
         # would lose shade growth through hexes at shade borders.)
 
-        def move(pos, direction):
-            """Move position pos into direction. Return whether still in map."""
-            mover = getattr(self, 'move_' + direction)
-            pos[:] = mover(pos)
-            if pos[0] < 0 or pos[1] < 0 or \
-               pos[0] >= self.size[0] or pos[1] >= self.size[1]:
-                return False
-            return True
-
         # TODO: Start circling only in earliest obstacle distance.
-        directions = ('DOWNLEFT', 'LEFT', 'UPLEFT', 'UPRIGHT', 'RIGHT', 'DOWNRIGHT')
         circle_in_map = True
         distance = 1
         yx = yx[:]
         #print('DEBUG CIRCLE_OUT', yx)
         while circle_in_map:
             circle_in_map = False
-            move(yx, 'RIGHT')
-            for dir_i in range(len(directions)):
+            self.basic_circle_out_move(yx, 'RIGHT')
+            for dir_i in range(len(self.circle_out_directions)):
                 for dir_progress in range(distance):
-                    direction = directions[dir_i]
-                    if move(yx, direction):
+                    direction = self.circle_out_directions[dir_i]
+                    if self.circle_out_move(yx, direction):
                         f(yx, distance, dir_i, dir_progress)
                         circle_in_map = True
             distance += 1
 
 
-class MapSquare(Map):
+class FovMapHex(FovMap, MapHex):
+    circle_out_directions = ('DOWNLEFT', 'LEFT', 'UPLEFT',
+                             'UPRIGHT', 'RIGHT', 'DOWNRIGHT')
 
-    # The following is used nowhere, so not implemented.
-    #def are_neighbors(self, pos_1, pos_2):
-    #    return abs(pos_1[0] - pos_2[0]) <= 1 and abs(pos_1[1] - pos_2[1] <= 1)
-
-    def move_UP(self, start_pos):
-        return [start_pos[0] - 1, start_pos[1]]
-
-    def move_DOWN(self, start_pos):
-        return [start_pos[0] + 1, start_pos[1]]
-
-    def get_neighbors(self, pos):
-        # DOWN, LEFT, RIGHT, UP  (alphabetically)
-        neighbors = [None, None, None, None]
-        if pos[0] > 0:
-            neighbors[3] = [pos[0] - 1, pos[1]]
-        if pos[1] > 0:
-            neighbors[1] = [pos[0], pos[1] - 1]
-        if pos[0] < self.size[0] - 1:
-            neighbors[0] = [pos[0] + 1, pos[1]]
-        if pos[1] < self.size[1] - 1:
-            neighbors[2] = [pos[0], pos[1] + 1]
-        return neighbors
+    def circle_out_move(self, yx, direction):
+        return self.basic_circle_out_move(yx, direction)
 
 
-class FovMapSquare(MapSquare):
-    """Just a marginally and unsatisfyingly adapted variant of MapFovHex."""
+class FovMapSquare(FovMap, MapSquare):
+    circle_out_directions = (('DOWN', 'LEFT'), ('LEFT', 'UP'),
+                             ('UP', 'RIGHT'), ('RIGHT', 'DOWN'))
 
-    def __init__(self, source_map, yx):
-        self.source_map = source_map
-        self.size = self.source_map.size
-        self.terrain = '?' * self.size_i
-        self[yx] = '.'
-        self.shadow_cones = []
-        self.circle_out(yx, self.shadow_process_hex)
-
-    def shadow_process_hex(self, yx, distance_to_center, dir_i, dir_progress):
-        CIRCLE = 360  # Since we'll float anyways, number is actually arbitrary.
-
-        def correct_arm(arm):
-            if arm < 0:
-                arm += CIRCLE
-            return arm
-
-        def in_shadow_cone(new_cone):
-            for old_cone in self.shadow_cones:
-                if old_cone[0] >= new_cone[0] and \
-                    new_cone[1] >= old_cone[1]:
-                    #print('DEBUG shadowed by:', old_cone)
-                    return True
-            return False
-
-        def merge_cone(new_cone):
-            for old_cone in self.shadow_cones:
-                if new_cone[0] > old_cone[0] and \
-                    (new_cone[1] < old_cone[0] or
-                     math.isclose(new_cone[1], old_cone[0])):
-                    #print('DEBUG merging to', old_cone)
-                    old_cone[0] = new_cone[0]
-                    #print('DEBUG merged cone:', old_cone)
-                    return True
-                if new_cone[1] < old_cone[1] and \
-                    (new_cone[0] > old_cone[1] or
-                     math.isclose(new_cone[0], old_cone[1])):
-                    #print('DEBUG merging to', old_cone)
-                    old_cone[1] = new_cone[1]
-                    #print('DEBUG merged cone:', old_cone)
-                    return True
-            return False
-
-        def eval_cone(cone):
-            new_cone = [left_arm, right_arm]
-            #print('DEBUG CONE', cone, '(', step_size, distance_to_center, number_steps, ')')
-            if in_shadow_cone(cone):
-                return
-            self[yx] = '.'
-            if self.source_map[yx] != '.':
-                #print('DEBUG throws shadow', cone)
-                unmerged = True
-                while merge_cone(cone):
-                    unmerged = False
-                if unmerged:
-                    self.shadow_cones += [cone]
-
-        #print('DEBUG', yx)
-        step_size = (CIRCLE/4) / distance_to_center
-        number_steps = dir_i * distance_to_center + dir_progress
-        left_arm = correct_arm(-(step_size/2) - step_size*number_steps)
-        right_arm = correct_arm(left_arm - step_size)
-        if right_arm > left_arm:
-            eval_cone([left_arm, 0])
-            eval_cone([CIRCLE, right_arm])
-        else:
-            eval_cone([left_arm, right_arm])
-
-    def circle_out(self, yx, f):
-
-        def move(pos, direction):
-            """Move position pos into direction. Return whether still in map."""
-            mover = getattr(self, 'move_' + direction)
-            pos[:] = mover(pos)
-            if pos[0] < 0 or pos[1] < 0 or \
-               pos[0] >= self.size[0] or pos[1] >= self.size[1]:
-                return False
-            return True
-
-        directions = (('DOWN', 'LEFT'), ('LEFT', 'UP'),
-                      ('UP', 'RIGHT'), ('RIGHT', 'DOWN'))
-        circle_in_map = True
-        distance = 1
-        yx = yx[:]
-        #print('DEBUG CIRCLE_OUT', yx)
-        while circle_in_map:
-            circle_in_map = False
-            move(yx, 'RIGHT')
-            for dir_i in range(len(directions)):
-                for dir_progress in range(distance):
-                    direction = directions[dir_i]
-                    move(yx, direction[0])
-                    if move(yx, direction[1]):
-                        f(yx, distance, dir_i, dir_progress)
-                        circle_in_map = True
-            distance += 1
+    def circle_out_move(self, yx, direction):
+        self.basic_circle_out_move(yx, direction[0])
+        return self.basic_circle_out_move(yx, direction[1])
 
 
 map_manager = game_common.MapManager((MapHex, MapSquare))
