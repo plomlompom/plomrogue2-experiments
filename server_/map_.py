@@ -33,9 +33,9 @@ class Map(game_common.Map):
             yield (y, self.terrain[y * width:(y + 1) * width])
 
     def get_fov_map(self, yx):
-        # TODO: Currently only have MapFovHex. Provide MapFovSquare.
-        fov_map_class = map_manager.get_map_class('Fov' + self.geometry)
-        return fov_map_class(self, yx)
+        fov_class_name = 'Fov' + self.__class__.__name__
+        fov_class = globals()[fov_class_name]
+        return fov_class(self, yx)
 
     # The following is used nowhere, so not implemented.
     #def items(self):
@@ -139,7 +139,7 @@ class MapHex(Map):
         return neighbors
 
 
-class MapFovHex(MapHex):
+class FovMapHex(MapHex):
 
     def __init__(self, source_map, yx):
         self.source_map = source_map
@@ -276,7 +276,7 @@ class MapSquare(Map):
         return neighbors
 
 
-class MapFovSquare(MapSquare):
+class FovMapSquare(MapSquare):
     """Just a marginally and unsatisfyingly adapted variant of MapFovHex."""
 
     def __init__(self, source_map, yx):
@@ -376,4 +376,4 @@ class MapFovSquare(MapSquare):
             distance += 1
 
 
-map_manager = game_common.MapManager(globals())
+map_manager = game_common.MapManager((MapHex, MapSquare))

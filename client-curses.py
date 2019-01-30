@@ -77,7 +77,7 @@ class MapHex(Map):
         return map_lines
 
 
-map_manager = game_common.MapManager(globals())
+map_manager = game_common.MapManager((MapHex, MapSquare))
 
 
 class World(game_common.World):

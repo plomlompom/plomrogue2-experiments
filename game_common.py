@@ -3,12 +3,9 @@ from parser import ArgError
 
 class MapManager:
 
-    def __init__(self, globs):
-        """With globs a globals() call, collect caller's Map classes."""
-        self.map_classes = []
-        for name in globs:
-            if name[:3] == 'Map':
-                self.map_classes += [globs[name]]
+    def __init__(self, map_classes):
+        """Collects tuple of basic Map[Geometry] classes."""
+        self.map_classes = map_classes
 
     def get_map_geometries(self):
         geometries = []
