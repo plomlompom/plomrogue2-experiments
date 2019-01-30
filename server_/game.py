@@ -118,11 +118,11 @@ class Thing(game_common.Thing):
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
         dijkstra_map[target] = 0
         shrunk = True
-        stencil = self.get_stencil()
+        visible_map = self.get_visible_map()
         while shrunk:
             shrunk = False
             for pos in dijkstra_map:
-                if stencil[pos] != '.':
+                if visible_map[pos] != '.':
                     continue
                 neighbors = dijkstra_map.get_neighbors(tuple(pos))
                 for direction in neighbors:
