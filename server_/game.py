@@ -68,49 +68,65 @@ class World(game_common.World):
 
 
 class Task:
+    argtypes = ''
 
-    def __init__(self, thing, name, args=()):
-        self.name = name
+    def __init__(self, thing, args=()):
         self.thing = thing
         self.args = args
         self.todo = 3
 
+    @property
+    def name(self):
+        prefix = 'Task_'
+        class_name = self.__class__.__name__
+        return class_name[len(prefix):]
+
     def check(self):
-        if self.name == 'MOVE':
-            test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
-            if self.thing.world.map_[test_pos] != '.':
-                raise GameError(str(self.thing.id_) +
-                                ' would move into illegal terrain')
-            for t in self.thing.world.things:
-                if t.position == test_pos:
-                    raise GameError(str(self.thing.id_) +
-                                    ' would move into other thing')
+        pass
 
     def get_args_string(self):
         stringed_args = []
         for arg in self.args:
-            if type(arg) == 'string':
+            if type(arg) == str:
                 stringed_args += [server_.io.quote(arg)]
             else:
                 raise GameError('stringifying arg type not implemented')
         return ' '.join(stringed_args)
 
 
+
+class Task_WAIT(Task):
+
+    def do(self):
+        return 'success'
+
+
+
+class Task_MOVE(Task):
+    argtypes = 'string:direction'
+
+    def check(self):
+        test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
+        if self.thing.world.map_[test_pos] != '.':
+            raise GameError('%s would move into illegal terrain' % self.thing.id_)
+        for t in self.thing.world.things:
+            if t.position == test_pos:
+                raise GameError('%s would move into other thing' % self.thing.id_)
+
+    def do(self):
+        self.thing.position = self.thing.world.map_.move(self.thing.position,
+                                                         self.args[0])
+        return 'success'
+
+
+
 class Thing(game_common.Thing):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.task = Task(self, 'WAIT')
+        self.task = Task_WAIT(self)
         self._last_task_result = None
         self._stencil = None
-
-    def task_WAIT(self):
-        return 'success'
-
-    def task_MOVE(self, direction):
-        self.position = self.world.map_.move(self.position, direction)
-        return 'success'
-    task_MOVE.argtypes = 'string:direction'
 
     def move_towards_target(self, target):
         dijkstra_map = type(self.world.map_)(self.world.map_.size)
@@ -165,9 +181,9 @@ class Thing(game_common.Thing):
         #print('DEBUG result', direction)
         if target_direction:
             self.set_task('MOVE', (target_direction,))
-            #self.world.game.io.send('would move ' + direction)
 
     def decide_task(self):
+        # TODO: Check if monster can follow player too well (even when they should lose them)
         visible_things = self.get_visible_things()
         target = None
         for t in visible_things:
@@ -184,7 +200,8 @@ class Thing(game_common.Thing):
 
 
     def set_task(self, task_name, args=()):
-        self.task = Task(self, task_name, args)
+        task_class = globals()['Task_' + task_name]
+        self.task = task_class(self, args)
         self.task.check()  # will throw GameError if necessary
 
     def proceed(self, is_AI=True):
@@ -213,8 +230,7 @@ class Thing(game_common.Thing):
             return
         self.task.todo -= 1
         if self.task.todo <= 0:
-            task = getattr(self, 'task_' + self.task.name)
-            self._last_task_result = task(*self.task.args)
+            self._last_task_result = self.task.do()
             self.task = None
         if is_AI and self.task is None:
             try:
@@ -376,39 +392,39 @@ class Game(game_common.CommonCommandsMixin):
             t = self.world.get_thing(thing_id, False)
             if t is None:
                 raiseArgError('No such Thing.')
-            t.task = Task(t, task_name, args)
+            task_class = globals()['Task_' + task_name]
+            t.task = task_class(t, args)
             t.task.todo = todo
 
         def task_prefixed(command_name, task_prefix, task_command,
                           argtypes_prefix=''):
-            method = None
+            func = None
             argtypes = ''
             if command_name[:len(task_prefix)] == task_prefix:
                 task_name = command_name[len(task_prefix):]
-                task_method_candidate = 'task_' + task_name
-                if hasattr(Thing, task_method_candidate):
-                    method = partial(task_command, task_name)
-                    task_method = getattr(Thing, task_method_candidate)
-                    if hasattr(task_method, 'argtypes'):
-                        argtypes = task_method.argtypes
-            if method is not None:
-                return method, argtypes_prefix + argtypes
+                task_class_candidate = 'Task_' + task_name
+                if task_class_candidate in globals():
+                    func = partial(task_command, task_name)
+                    task_class = globals()[task_class_candidate]
+                    argtypes = task_class.argtypes
+            if func is not None:
+                return func, argtypes_prefix + argtypes
             return None, argtypes
 
-        method, argtypes = task_prefixed(command_name, 'TASK:', cmd_TASK_colon)
-        if method:
-            return method, argtypes
-        method, argtypes = task_prefixed(command_name, 'SET_TASK:',
+        func, argtypes = task_prefixed(command_name, 'TASK:', cmd_TASK_colon)
+        if func:
+            return func, argtypes
+        func, argtypes = task_prefixed(command_name, 'SET_TASK:',
                                          cmd_SET_TASK_colon,
-                                         'int:nonneg int:nonneg')
-        if method:
-            return method, argtypes
-        method_candidate = 'cmd_' + command_name
-        if hasattr(self, method_candidate):
-            method = getattr(self, method_candidate)
-            if hasattr(method, 'argtypes'):
-                argtypes = method.argtypes
-        return method, argtypes
+                                         'int:nonneg int:nonneg ')
+        if func:
+            return func, argtypes
+        func_candidate = 'cmd_' + command_name
+        if hasattr(self, func_candidate):
+            func = getattr(self, func_candidate)
+            if hasattr(func, 'argtypes'):
+                argtypes = func.argtypes
+        return func, argtypes
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'geometry':
@@ -445,6 +461,6 @@ class Game(game_common.CommonCommandsMixin):
                 if task is not None:
                     task_args = task.get_args_string()
                     write(f, 'SET_TASK:%s %s %s %s' % (task.name, thing.id_,
-                                                    task.todo, task_args))
+                                                       task.todo, task_args))
             write(f, 'PLAYER_ID %s' % self.world.player_id)
     cmd_SAVE.dont_save = True
