@@ -45,45 +45,39 @@ class IO_Handler(socketserver.BaseRequestHandler):
         instructions.
 
         """
-        import plom_socket_io
 
-        def caught_send(socket, message):
-            """Send message by socket, catch broken socket connection error."""
-            try:
-                plom_socket_io.send(socket, message)
-            except plom_socket_io.BrokenSocketConnection:
-                pass
-
-        def send_queue_messages(socket, queue_in, thread_alive):
+        def send_queue_messages(plom_socket, queue_in, thread_alive):
             """Send messages via socket from queue_in while thread_alive[0]."""
             while thread_alive[0]:
                 try:
                     msg = queue_in.get(timeout=1)
                 except queue.Empty:
                     continue
-                caught_send(socket, msg)
+                plom_socket.send(msg, True)
 
         import uuid
+        import plom_socket
+        plom_socket = plom_socket.PlomSocket(self.request)
         print('CONNECTION FROM:', str(self.client_address))
         connection_id = uuid.uuid4()
         queue_in = queue.Queue()
         self.server.queue_out.put(('ADD_QUEUE', connection_id, queue_in))
         thread_alive = [True]
         t = threading.Thread(target=send_queue_messages,
-                             args=(self.request, queue_in, thread_alive))
+                             args=(plom_socket, queue_in, thread_alive))
         t.start()
-        for message in plom_socket_io.recv(self.request):
+        for message in plom_socket.recv():
             if message is None:
-                caught_send(self.request, 'BAD MESSAGE')
+                plom_socket.send('BAD MESSAGE', True)
             elif 'QUIT' == message:
-                caught_send(self.request, 'BYE')
+                plom_socket.send('BYE', True)
                 break
             else:
                 self.server.queue_out.put(('COMMAND', connection_id, message))
         self.server.queue_out.put(('KILL_QUEUE', connection_id))
         thread_alive[0] = False
         print('CONNECTION CLOSED FROM:', str(self.client_address))
-        self.request.close()
+        plom_socket.socket.close()
 
 
 class GameIO():

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import curses
-import plom_socket_io
+import plom_socket
 import socket
 import threading
 from parser import ArgError, Parser
@@ -186,8 +186,8 @@ ASCII_printable = ' !"#$%&\'\(\)*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWX'
                   'YZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~'
 
 
-def recv_loop(socket, game):
-    for msg in plom_socket_io.recv(s):
+def recv_loop(plom_socket, game):
+    for msg in plom_socket.recv():
         game.handle_input(msg)
 
 
@@ -353,8 +353,8 @@ class TurnWidget(Widget):
 
 class TUI:
 
-    def __init__(self, socket, game):
-        self.socket = socket
+    def __init__(self, plom_socket, game):
+        self.socket = plom_socket
         self.game = game
         self.parser = Parser(self.game)
         self.to_update = {'edit': False}
@@ -400,26 +400,26 @@ class TUI:
                 elif map_mode:
                     if type(self.game.world.map_) == MapSquare:
                         if key == 'a':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE LEFT')
+                            self.socket.send('TASK:MOVE LEFT')
                         elif key == 'd':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE RIGHT')
+                            self.socket.send('TASK:MOVE RIGHT')
                         elif key == 'w':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE UP')
+                            self.socket.send('TASK:MOVE UP')
                         elif key == 's':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWN')
+                            self.socket.send('TASK:MOVE DOWN')
                     elif type(self.game.world.map_) == MapHex:
                         if key == 'w':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE UPLEFT')
+                            self.socket.send('TASK:MOVE UPLEFT')
                         elif key == 'e':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE UPRIGHT')
+                            self.socket.send('TASK:MOVE UPRIGHT')
                         if key == 's':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE LEFT')
+                            self.socket.send('TASK:MOVE LEFT')
                         elif key == 'd':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE RIGHT')
+                            self.socket.send('TASK:MOVE RIGHT')
                         if key == 'x':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWNLEFT')
+                            self.socket.send('TASK:MOVE DOWNLEFT')
                         elif key == 'c':
-                            plom_socket_io.send(self.socket, 'TASK:MOVE DOWNRIGHT')
+                            self.socket.send('TASK:MOVE DOWNRIGHT')
                 else:
                     if len(key) == 1 and key in ASCII_printable and \
                             len(self.to_send) < len(self.edit):
@@ -429,7 +429,7 @@ class TUI:
                         self.to_send[:] = self.to_send[:-1]
                         self.to_update['edit'] = True
                     elif key == '\n':  # Return key
-                        plom_socket_io.send(self.socket, ''.join(self.to_send))
+                        self.socket.send(''.join(self.to_send))
                         self.to_send[:] = []
                         self.to_update['edit'] = True
             except curses.error:
@@ -439,7 +439,8 @@ class TUI:
 
 
 s = socket.create_connection(('127.0.0.1', 5000))
+plom_socket = plom_socket.PlomSocket(s)
 game = Game()
-t = threading.Thread(target=recv_loop, args=(s, game))
+t = threading.Thread(target=recv_loop, args=(plom_socket, game))
 t.start()
-TUI(s, game)
+TUI(plom_socket, game)
