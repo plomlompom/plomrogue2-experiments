@@ -3,11 +3,9 @@ sys.path.append('../')
 import game_common
 import server_.map_
 import server_.io
+import server_.tasks
+from server_.game_error import GameError
 from parser import ArgError
-
-
-class GameError(Exception):
-    pass
 
 
 class World(game_common.World):
@@ -67,55 +65,6 @@ class World(game_common.World):
         self.things = [player, npc]
 
 
-class Task:
-    argtypes = ''
-
-    def __init__(self, thing, args=()):
-        self.thing = thing
-        self.args = args
-        self.todo = 3
-
-    @property
-    def name(self):
-        prefix = 'Task_'
-        class_name = self.__class__.__name__
-        return class_name[len(prefix):]
-
-    def check(self):
-        pass
-
-    def get_args_string(self):
-        stringed_args = []
-        for arg in self.args:
-            if type(arg) == str:
-                stringed_args += [server_.io.quote(arg)]
-            else:
-                raise GameError('stringifying arg type not implemented')
-        return ' '.join(stringed_args)
-
-
-
-class Task_WAIT(Task):
-
-    def do(self):
-        return 'success'
-
-
-
-class Task_MOVE(Task):
-    argtypes = 'string:direction'
-
-    def check(self):
-        test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
-        if self.thing.world.map_[test_pos] != '.':
-            raise GameError('%s would move into illegal terrain' % self.thing.id_)
-        for t in self.thing.world.things:
-            if t.position == test_pos:
-                raise GameError('%s would move into other thing' % self.thing.id_)
-
-    def do(self):
-        self.thing.position = self.thing.world.map_.move(self.thing.position,
-                                                         self.args[0])
         return 'success'
 
 
@@ -124,7 +73,7 @@ class Thing(game_common.Thing):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.task = Task_WAIT(self)
+        self.task = self.world.game.task_manager.get_task_class('WAIT')(self)
         self._last_task_result = None
         self._stencil = None
 
@@ -200,7 +149,7 @@ class Thing(game_common.Thing):
 
 
     def set_task(self, task_name, args=()):
-        task_class = globals()['Task_' + task_name]
+        task_class = self.world.game.task_manager.get_task_class(task_name)
         self.task = task_class(self, args)
         self.task.check()  # will throw GameError if necessary
 
@@ -273,6 +222,7 @@ class Game(game_common.CommonCommandsMixin):
 
     def __init__(self, game_file_name):
         self.map_manager = server_.map_.map_manager
+        self.task_manager = server_.tasks.task_manager
         self.world = World(self)
         self.io = server_.io.GameIO(game_file_name, self)
         # self.pool and self.pool_result are currently only needed by the FIB
@@ -392,7 +342,7 @@ class Game(game_common.CommonCommandsMixin):
             t = self.world.get_thing(thing_id, False)
             if t is None:
                 raiseArgError('No such Thing.')
-            task_class = globals()['Task_' + task_name]
+            task_class = self.task_manager.get_task_class(task_name)
             t.task = task_class(t, args)
             t.task.todo = todo
 
@@ -402,10 +352,10 @@ class Game(game_common.CommonCommandsMixin):
             argtypes = ''
             if command_name[:len(task_prefix)] == task_prefix:
                 task_name = command_name[len(task_prefix):]
-                task_class_candidate = 'Task_' + task_name
-                if task_class_candidate in globals():
+                task_manager_reply = self.task_manager.get_task_class(task_name)
+                if task_manager_reply is not None:
                     func = partial(task_command, task_name)
-                    task_class = globals()[task_class_candidate]
+                    task_class = task_manager_reply
                     argtypes = task_class.argtypes
             if func is not None:
                 return func, argtypes_prefix + argtypes

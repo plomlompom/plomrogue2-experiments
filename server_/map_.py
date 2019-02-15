@@ -3,6 +3,7 @@ sys.path.append('../')
 import game_common
 import server_.game
 import math
+from server_.game_error import GameError
 
 
 class Map(game_common.Map):
@@ -60,7 +61,7 @@ class Map(game_common.Map):
             neighbors[direction] = None
             try:
                 neighbors[direction] = self.move(pos, direction)
-            except server_.game.GameError:
+            except GameError:
                 pass
         self.neighbors_to[pos] = neighbors
         return neighbors
@@ -77,7 +78,7 @@ class Map(game_common.Map):
         new_pos = mover(start_pos)
         if new_pos[0] < 0 or new_pos[1] < 0 or \
                 new_pos[0] >= self.size[0] or new_pos[1] >= self.size[1]:
-            raise server_.game.GameError('would move outside map bounds')
+            raise GameError('would move outside map bounds')
         return new_pos
 
     def move_LEFT(self, start_pos):

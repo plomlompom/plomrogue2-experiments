@@ -4,6 +4,7 @@ import queue
 import sys
 sys.path.append('../')
 import parser
+from server_.game_error import GameError
 
 
 # Avoid "Address already in use" errors.
@@ -172,7 +173,7 @@ class GameIO():
                             f.write(input_ + '\n')
         except parser.ArgError as e:
             answer(connection_id, 'ARGUMENT_ERROR ' + quote(str(e)))
-        except server_.game.GameError as e:
+        except GameError as e:
             answer(connection_id, 'GAME_ERROR ' + quote(str(e)))
 
     def send(self, msg, connection_id=None):
