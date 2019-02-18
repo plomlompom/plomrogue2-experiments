@@ -84,7 +84,6 @@ class Thing(ThingBase):
             self.set_task('MOVE', (target_direction,))
 
     def decide_task(self):
-        # TODO: Check if monster can follow player too well (even when they should lose them)
         visible_things = self.get_visible_things()
         target = None
         for t in visible_things:
