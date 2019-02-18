@@ -4,7 +4,7 @@ import plom_socket
 import socket
 import threading
 from parser import ArgError, Parser
-from plomrogue2 import (MapBase, WorldBase, ThingBase, cmd_MAP, cmd_THING_TYPE,
+from plomrogue import (MapBase, WorldBase, ThingBase, cmd_MAP, cmd_THING_TYPE,
                         cmd_THING_POS)
 import types
 
