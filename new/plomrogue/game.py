@@ -20,6 +20,7 @@ class ThingBase:
         self.position = position
 
 
+
 class Thing(ThingBase):
 
     def __init__(self, *args, **kwargs):

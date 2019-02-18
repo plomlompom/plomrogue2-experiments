@@ -3,6 +3,7 @@ import threading
 import socketserver
 from plomrogue.errors import GameError, ArgError, BrokenSocketConnection
 from plomrogue.parser import Parser
+from plomrogue.misc import quote
 
 
 
