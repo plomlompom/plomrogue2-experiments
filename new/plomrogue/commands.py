@@ -67,7 +67,9 @@ def cmd_SAVE(game):
             task = thing.task
             if task is not None:
                 task_args = task.get_args_string()
-                write(f, 'SET_TASK:%s %s %s %s' % (task.name, thing.id_,
+                task_name = [k for k in game.tasks.keys()
+                             if game.tasks[k] == task.__class__][0]
+                write(f, 'SET_TASK:%s %s %s %s' % (task_name, thing.id_,
                                                    task.todo, task_args))
         write(f, 'PLAYER_ID %s' % game.world.player_id)
 cmd_SAVE.dont_save = True

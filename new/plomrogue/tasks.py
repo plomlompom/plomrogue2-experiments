@@ -11,12 +11,6 @@ class Task:
         self.args = args
         self.todo = 3
 
-    @property
-    def name(self):
-        prefix = 'Task_'
-        class_name = self.__class__.__name__
-        return class_name[len(prefix):]
-
     def check(self):
         pass
 
