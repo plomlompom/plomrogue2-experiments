@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
-from plomrogue import Game
+from plomrogue.game import Game
 
 if len(sys.argv) != 2:
     print('wrong number of arguments, expected one (game file)')

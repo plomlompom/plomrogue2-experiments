@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import curses
-import plom_socket
 import socket
 import threading
-from parser import ArgError, Parser
-from plomrogue import (MapBase, WorldBase, ThingBase, cmd_MAP, cmd_THING_TYPE,
-                        cmd_THING_POS)
+from plomrogue.parser import ArgError, Parser
+from plomrogue.commands import cmd_MAP, cmd_THING_TYPE, cmd_THING_POS
+from plomrogue.game import Game, WorldBase, ThingBase
+from plomrogue.mapping import MapBase
+from plomrogue.io import PlomSocket
 import types
 
 
@@ -415,7 +416,7 @@ class TUI:
 
 
 s = socket.create_connection(('127.0.0.1', 5000))
-plom_socket = plom_socket.PlomSocket(s)
+plom_socket = PlomSocket(s)
 game = Game()
 t = threading.Thread(target=recv_loop, args=(plom_socket, game))
 t.start()
