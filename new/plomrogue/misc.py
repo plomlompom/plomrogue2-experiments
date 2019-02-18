@@ -841,7 +841,12 @@ class Game:
         self.send_gamestate()
 
     def get_command(self, command_name):
-        from functools import partial
+
+        def partial_with_attrs(f, *args, **kwargs):
+            from functools import partial
+            p = partial(f, *args, **kwargs)
+            p.__dict__.update(f.__dict__)
+            return p
 
         def cmd_TASK_colon(task_name, game, *args):
             game.world.get_player().set_task(task_name, args)
@@ -860,7 +865,7 @@ class Game:
             if command_name[:len(task_prefix)] == task_prefix:
                 task_name = command_name[len(task_prefix):]
                 if task_name in self.tasks:
-                    f = partial(task_command, task_name, self)
+                    f = partial_with_attrs(task_command, task_name, self)
                     task = self.tasks[task_name]
                     if argtypes_prefix:
                         f.argtypes = argtypes_prefix + ' ' + task.argtypes
@@ -877,9 +882,7 @@ class Game:
         if command:
             return command
         if command_name in self.commands:
-            f = partial(self.commands[command_name], self)
-            if hasattr(self.commands[command_name], 'argtypes'):
-                f.argtypes = self.commands[command_name].argtypes
+            f = partial_with_attrs(self.commands[command_name], self)
             return f
         return None
 
