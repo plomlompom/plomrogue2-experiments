@@ -4,9 +4,10 @@ import socket
 import threading
 from plomrogue.parser import ArgError, Parser
 from plomrogue.commands import cmd_MAP, cmd_THING_TYPE, cmd_THING_POS
-from plomrogue.game import Game, WorldBase, ThingBase
+from plomrogue.game import Game, WorldBase
 from plomrogue.mapping import MapBase
 from plomrogue.io import PlomSocket
+from plomrogue.things import ThingBase
 import types
 
 
