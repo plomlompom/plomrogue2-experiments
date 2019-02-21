@@ -3,7 +3,7 @@ import curses
 import socket
 import threading
 from plomrogue.parser import ArgError, Parser
-from plomrogue.commands import cmd_MAP, cmd_THING_TYPE, cmd_THING_POS
+from plomrogue.commands import cmd_MAP, cmd_THING_POS
 from plomrogue.game import Game, WorldBase
 from plomrogue.mapping import MapBase
 from plomrogue.io import PlomSocket
@@ -104,6 +104,11 @@ cmd_PLAYER_POS.argtypes = 'yx_tuple:pos'
 def cmd_GAME_STATE_COMPLETE(self):
     self.to_update['turn'] = True
     self.to_update['map'] = True
+
+def cmd_THING_TYPE(game, i, type_):
+    t = game.world.get_thing(i)
+    t.type_ = type_
+cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
 
 class Game:

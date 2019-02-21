@@ -8,7 +8,7 @@ from plomrogue.mapping import MapHex
 from plomrogue.parser import Parser
 from plomrogue.io import GameIO
 from plomrogue.misc import quote, stringify_yx
-from plomrogue.things import Thing
+from plomrogue.things import Thing, ThingMonster, ThingHuman
 
 
 
@@ -77,12 +77,10 @@ class World(WorldBase):
                 self.map_[pos] = '#'
                 continue
             self.map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
-        player = self.game.thing_type(self, 0)
-        player.type_ = 'human'
+        player = self.game.thing_types['human'](self, 0)
         player.position = [random.randint(0, yx[0] -1),
                            random.randint(0, yx[1] - 1)]
-        npc = self.game.thing_type(self, 1)
-        npc.type_ = 'monster'
+        npc = self.game.thing_types['monster'](self, 1)
         npc.position = [random.randint(0, yx[0] -1),
                         random.randint(0, yx[1] -1)]
         self.things = [player, npc]
@@ -109,10 +107,13 @@ class Game:
         self.world_type = World
         self.world = self.world_type(self)
         self.thing_type = Thing
+        self.thing_types = {'human': ThingHuman, 'monster': ThingMonster}
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':
             return self.world.map_.get_directions()
+        elif string_option_type == 'thingtype':
+            return list(self.thing_types.keys())
         return None
 
     def send_gamestate(self, connection_id=None):

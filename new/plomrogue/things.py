@@ -3,11 +3,11 @@ from plomrogue.errors import GameError
 
 
 class ThingBase:
+    type_ = '?'
 
-    def __init__(self, world, id_, type_='?', position=[0,0]):
+    def __init__(self, world, id_, position=[0,0]):
         self.world = world
         self.id_ = id_
-        self.type_ = type_
         self.position = position
 
 
@@ -126,3 +126,13 @@ class Thing(ThingBase):
             if stencil[thing.position] == '.':
                 visible_things += [thing]
         return visible_things
+
+
+
+class ThingHuman(Thing):
+    type_ = 'human'
+
+
+
+class ThingMonster(Thing):
+    type_ = 'monster'

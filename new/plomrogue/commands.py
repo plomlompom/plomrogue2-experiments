@@ -16,9 +16,25 @@ def cmd_MAP(game, yx):
 cmd_MAP.argtypes = 'yx_tuple:pos'
 
 def cmd_THING_TYPE(game, i, type_):
-    t = game.world.get_thing(i)
-    t.type_ = type_
-cmd_THING_TYPE.argtypes = 'int:nonneg string'
+    t_old = game.world.get_thing(i)
+    t_new = game.thing_types[type_](game.world, i)
+    #attr_names_of_old = [name for name in dir(t_old) where name[:2] != '__']
+    #attr_names_of_new = [name for name in dir(t_new) where name[:2] != '__']
+    #class_new = type(t_new)
+    #for attr_name in [v for v in attr_names_of_old if v in attr_names_of_new]:
+    #    if hasattr(class_new, attr_name):
+    #        attr_new = getattr(class_new, attr_name)
+    #        if type(attr_new) == property and attr_new.fset is None:
+    #            continue  # ignore read-only properties on t_new
+    #    attr_old = getattr(t_old, attr_name)
+    #    attr_new = getattr(t_new, attr_name)
+    #    if type(attr_old) != type(attr_new):
+    #        continue
+    #    setattr(t_new, attr_name, attr_old)
+    t_new.position = t_old.position
+    t_old_index = game.world.things.index(t_old)
+    game.world.things[t_old_index] = t_new
+cmd_THING_TYPE.argtypes = 'int:nonneg string:thingtype'
 
 def cmd_THING_POS(game, i, yx):
     t = game.world.get_thing(i)
