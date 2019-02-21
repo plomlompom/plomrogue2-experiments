@@ -172,6 +172,8 @@ class Game:
             symbol = '@'
         elif type_ == 'monster':
             symbol = 'm'
+        elif type_ == 'item':
+            symbol = 'i'
         return symbol
 
 
@@ -292,7 +294,10 @@ class MapWidget(Widget):
             terrain_as_list = list(self.tui.game.world.map_.terrain[:])
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
-                terrain_as_list[pos_i] = self.tui.game.symbol_for_type(t.type_)
+                symbol = self.tui.game.symbol_for_type(t.type_)
+                if symbol in {'i'} and terrain_as_list[pos_i] in {'@', 'm'}:
+                    continue
+                terrain_as_list[pos_i] = symbol
             return ''.join(terrain_as_list)
 
         def pad_or_cut_x(lines):
@@ -315,6 +320,8 @@ class MapWidget(Widget):
             for c in ''.join(lines):
                 if c in {'@', 'm'}:
                     chars_with_attrs += [(c, curses.color_pair(1))]
+                elif c == 'i':
+                    chars_with_attrs += [(c, curses.color_pair(4))]
                 elif c == '.':
                     chars_with_attrs += [(c, curses.color_pair(2))]
                 elif c in {'x', 'X', '#'}:
@@ -365,6 +372,7 @@ class TUI:
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
         curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
+        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
         curses.curs_set(False)  # hide cursor
         self.to_send = []
         self.edit = EditWidget(self, (0, 6), (1, 14), check_tui = ['edit'])

@@ -13,6 +13,20 @@ class ThingBase:
 
 
 class Thing(ThingBase):
+    blocking = False
+
+    def proceed(self):
+        pass
+
+
+
+class ThingItem(Thing):
+    type_ = 'item'
+
+
+
+class ThingAnimate(Thing):
+    blocking = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -129,10 +143,10 @@ class Thing(ThingBase):
 
 
 
-class ThingHuman(Thing):
+class ThingHuman(ThingAnimate):
     type_ = 'human'
 
 
 
-class ThingMonster(Thing):
+class ThingMonster(ThingAnimate):
     type_ = 'monster'

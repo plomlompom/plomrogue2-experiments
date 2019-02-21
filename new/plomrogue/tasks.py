@@ -40,7 +40,7 @@ class Task_MOVE(Task):
         if self.thing.world.map_[test_pos] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
         for t in self.thing.world.things:
-            if t.position == test_pos:
+            if t.blocking and t.position == test_pos:
                 raise GameError('%s would move into other thing' % self.thing.id_)
 
     def do(self):
