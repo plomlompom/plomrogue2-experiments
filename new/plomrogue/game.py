@@ -37,6 +37,11 @@ class World(WorldBase):
         super().__init__(*args, **kwargs)
         self.player_id = 0
 
+    def new_thing_id(self):
+        if len(self.things) == 0:
+            return 0
+        return self.things[-1].id_ + 1
+
     def new_map(self, yx):
         self.map_ = self.game.map_type(yx)
 
@@ -69,6 +74,15 @@ class World(WorldBase):
 
     def make_new(self, yx, seed):
         import random
+
+        def add_thing(type_):
+            t = self.game.thing_types[type_](self)
+            t.position = [random.randint(0, yx[0] -1),
+                          random.randint(0, yx[1] - 1)]
+            self.things += [t]
+            return t
+
+        self.things = []
         random.seed(seed)
         self.turn = 0
         self.new_map(yx)
@@ -77,16 +91,13 @@ class World(WorldBase):
                 self.map_[pos] = '#'
                 continue
             self.map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
-        player = self.game.thing_types['human'](self, 0)
-        player.position = [random.randint(0, yx[0] -1),
-                           random.randint(0, yx[1] - 1)]
-        npc = self.game.thing_types['monster'](self, 1)
-        npc.position = [random.randint(0, yx[0] -1),
-                        random.randint(0, yx[1] -1)]
-        item = self.game.thing_types['item'](self, 2)
-        item.position = [random.randint(0, yx[0] -1),
-                         random.randint(0, yx[1] -1)]
-        self.things = [player, npc, item]
+
+        player = add_thing('human')
+        self.player_id = player.id_
+        add_thing('monster')
+        add_thing('monster')
+        add_thing('item')
+        add_thing('item')
         return 'success'
 
 

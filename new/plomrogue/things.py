@@ -5,10 +5,13 @@ from plomrogue.errors import GameError
 class ThingBase:
     type_ = '?'
 
-    def __init__(self, world, id_, position=[0,0]):
+    def __init__(self, world, id_=None, position=[0,0]):
         self.world = world
-        self.id_ = id_
         self.position = position
+        if id_ is None:
+            self.id_ = self.world.new_thing_id()
+        else:
+            self.id_ = id_
 
 
 
