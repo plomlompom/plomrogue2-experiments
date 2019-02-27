@@ -37,6 +37,10 @@ class World(WorldBase):
         super().__init__(*args, **kwargs)
         self.player_id = 0
 
+    @property
+    def player(self):
+        return self.get_thing(self.player_id)
+
     def new_thing_id(self):
         if len(self.things) == 0:
             return 0
@@ -58,19 +62,15 @@ class World(WorldBase):
         the player's task is finished, the loop breaks.
         """
         while True:
-            player = self.get_player()
-            player_i = self.things.index(player)
+            player_i = self.things.index(self.player)
             for thing in self.things[player_i+1:]:
                 thing.proceed()
             self.turn += 1
             for thing in self.things[:player_i]:
                 thing.proceed()
-            player.proceed(is_AI=False)
-            if player.task is None:
+            self.player.proceed(is_AI=False)
+            if self.player.task is None:
                 break
-
-    def get_player(self):
-        return self.get_thing(self.player_id)
 
     def make_new(self, yx, seed):
         import random
@@ -140,22 +140,20 @@ class Game:
 
         self.io.send('TURN ' + str(self.world.turn))
         self.io.send('MAP ' + stringify_yx(self.world.map_.size))
-        visible_map = self.world.get_player().get_visible_map()
+        visible_map = self.world.player.get_visible_map()
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
-        visible_things = self.world.get_player().get_visible_things()
+        visible_things = self.world.player.get_visible_things()
         for thing in visible_things:
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
                                               stringify_yx(thing.position)))
-        player = self.world.get_player()
-        self.io.send('PLAYER_POS %s' % (stringify_yx(player.position)))
-        if len(player.inventory) > 0:
-            self.io.send('PLAYER_INVENTORY %s' % ','.join([str(i) for i in
-                                                           player.inventory]))
+        if len(self.world.player.inventory) > 0:
+            self.io.send('PLAYER_INVENTORY %s' %
+                         ','.join([str(i) for i in self.world.player.inventory]))
         else:
             self.io.send('PLAYER_INVENTORY ,')
-        for id_ in player.inventory:
+        for id_ in self.world.player.inventory:
             thing = self.world.get_thing(id_)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
@@ -170,7 +168,7 @@ class Game:
         """
         self.io.send('TURN_FINISHED ' + str(self.world.turn))
         self.world.proceed_to_next_player_turn()
-        msg = str(self.world.get_player()._last_task_result)
+        msg = str(self.world.player._last_task_result)
         self.io.send('LAST_PLAYER_TASK_RESULT ' + quote(msg))
         self.send_gamestate()
 
@@ -183,7 +181,7 @@ class Game:
             return p
 
         def cmd_TASK_colon(task_name, game, *args):
-            game.world.get_player().set_task(task_name, args)
+            game.world.player.set_task(task_name, args)
             game.proceed()
 
         def cmd_SET_TASK_colon(task_name, game, thing_id, todo, *args):

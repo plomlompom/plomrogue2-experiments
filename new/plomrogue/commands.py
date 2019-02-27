@@ -60,10 +60,9 @@ def cmd_TURN(game, n):
 cmd_TURN.argtypes = 'int:nonneg'
 
 def cmd_SWITCH_PLAYER(game):
-    player = game.world.get_player()
-    player.set_task('WAIT')
+    game.world.player.set_task('WAIT')
     thing_ids = [t.id_ for t in game.world.things]
-    player_index = thing_ids.index(player.id_)
+    player_index = thing_ids.index(game.world.player.id_)
     if player_index == len(thing_ids) - 1:
         game.world.player_id = thing_ids[0]
     else:
