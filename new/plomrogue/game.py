@@ -1,4 +1,4 @@
-from plomrogue.tasks import Task_WAIT, Task_MOVE
+from plomrogue.tasks import Task_WAIT, Task_MOVE, Task_PICKUP, Task_DROP
 from plomrogue.errors import ArgError
 from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE, cmd_MAP,
                                 cmd_MAP, cmd_THING_TYPE, cmd_THING_POS,
@@ -107,7 +107,10 @@ class Game:
     def __init__(self, game_file_name):
         self.io = GameIO(game_file_name, self)
         self.map_type = MapHex
-        self.tasks = {'WAIT': Task_WAIT, 'MOVE': Task_MOVE}
+        self.tasks = {'WAIT': Task_WAIT,
+                      'MOVE': Task_MOVE,
+                      'PICKUP': Task_PICKUP,
+                      'DROP': Task_DROP}
         self.commands = {'GEN_WORLD': cmd_GEN_WORLD,
                          'GET_GAMESTATE': cmd_GET_GAMESTATE,
                          'MAP': cmd_MAP,
@@ -147,6 +150,13 @@ class Game:
                                               stringify_yx(thing.position)))
         player = self.world.get_player()
         self.io.send('PLAYER_POS %s' % (stringify_yx(player.position)))
+        self.io.send('PLAYER_INVENTORY %s' % ','.join([str(i) for i in
+                                                       player.inventory]))
+        for id_ in player.inventory:
+            thing = self.world.get_thing(id_)
+            self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
+            self.io.send('THING_POS %s %s' % (thing.id_,
+                                              stringify_yx(thing.position)))
         self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):

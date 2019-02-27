@@ -46,3 +46,46 @@ class Task_MOVE(Task):
     def do(self):
         self.thing.position = self.thing.world.map_.move(self.thing.position,
                                                          self.args[0])
+        for id_ in self.thing.inventory:
+            t = self.thing.world.get_thing(id_)
+            t.position[:] = self.thing.position
+
+
+
+class Task_PICKUP(Task):
+    argtypes = 'int:nonneg'
+
+    def check(self):
+        to_pick_up = self.thing.world.get_thing(self.args[0],
+                                                create_unfound=False)
+        if to_pick_up is None:
+            raise GameError('no thing of ID %s to pick up' % self.args[0])
+        if not (self.thing.position == to_pick_up.position or
+                tuple(to_pick_up.position) in
+                self.thing.world.map_.get_neighbors(self.thing.position)):
+            raise GameError('thing of ID %s not in reach to pick up'
+                            % self.args[0])
+
+    def do(self):
+        to_pick_up = self.thing.world.get_thing(self.args[0])
+        self.thing.inventory += [self.args[0]]
+        to_pick_up.in_inventory = True
+
+
+
+class Task_DROP(Task):
+    argtypes = 'int:nonneg'
+
+    def check(self):
+        to_pick_up = self.thing.world.get_thing(self.args[0],
+                                                create_unfound=False)
+        if to_pick_up is None:
+            raise GameError('no thing of ID %s to drop' % self.args[0])
+        if to_pick_up.id_ not in self.thing.inventory:
+            raise GameError('no thing of ID %s to drop in inventory'
+                            % self.args[0])
+
+    def do(self):
+        to_drop = self.thing.world.get_thing(self.args[0])
+        del self.thing.inventory[self.thing.inventory.index(to_drop.id_)]
+        to_drop.in_inventory = False

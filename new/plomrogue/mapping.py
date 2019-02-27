@@ -62,6 +62,7 @@ class Map(MapBase):
 
     def get_neighbors(self, pos):
         neighbors = {}
+        pos = tuple(pos)
         if not hasattr(self, 'neighbors_to'):
             self.neighbors_to = {}
         if pos in self.neighbors_to:

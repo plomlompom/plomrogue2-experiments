@@ -17,6 +17,11 @@ class ThingBase:
 
 class Thing(ThingBase):
     blocking = False
+    in_inventory = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.inventory = []
 
     def proceed(self):
         pass
@@ -140,7 +145,7 @@ class ThingAnimate(Thing):
         stencil = self.get_stencil()
         visible_things = []
         for thing in self.world.things:
-            if stencil[thing.position] == '.':
+            if (not thing.in_inventory) and stencil[thing.position] == '.':
                 visible_things += [thing]
         return visible_things
 
