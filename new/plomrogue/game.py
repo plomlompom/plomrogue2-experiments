@@ -150,8 +150,11 @@ class Game:
                                               stringify_yx(thing.position)))
         player = self.world.get_player()
         self.io.send('PLAYER_POS %s' % (stringify_yx(player.position)))
-        self.io.send('PLAYER_INVENTORY %s' % ','.join([str(i) for i in
-                                                       player.inventory]))
+        if len(player.inventory) > 0:
+            self.io.send('PLAYER_INVENTORY %s' % ','.join([str(i) for i in
+                                                           player.inventory]))
+        else:
+            self.io.send('PLAYER_INVENTORY ,')
         for id_ in player.inventory:
             thing = self.world.get_thing(id_)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))

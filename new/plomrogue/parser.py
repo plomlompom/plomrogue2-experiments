@@ -116,6 +116,9 @@ class Parser:
             elif tmpl == 'yx_tuple:pos':
                 args += [self.parse_yx_tuple(arg, 'pos')]
             elif tmpl == 'seq:int:nonneg':
+                if arg == ',':
+                    args += [[]]
+                    continue
                 sub_tokens = arg.split(',')
                 if len(sub_tokens) < 1:
                     raise ArgError('Argument must be non-empty sequence.')

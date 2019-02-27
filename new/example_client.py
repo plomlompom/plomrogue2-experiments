@@ -3,7 +3,7 @@ import curses
 import socket
 import threading
 from plomrogue.parser import ArgError, Parser
-from plomrogue.commands import cmd_MAP, cmd_THING_POS
+from plomrogue.commands import cmd_MAP, cmd_THING_POS, cmd_PLAYER_ID
 from plomrogue.game import Game, WorldBase
 from plomrogue.mapping import MapBase
 from plomrogue.io import PlomSocket
@@ -69,11 +69,15 @@ class World(WorldBase):
         """
         super().__init__(*args, **kwargs)
         self.map_ = Map()
-        self.player_position = (0, 0)
         self.player_inventory = []
+        self.player_id = 0
 
     def new_map(self, yx):
         self.map_ = Map(yx)
+
+    @property
+    def player(self):
+        return self.get_thing(self.player_id)
 
 
 def cmd_LAST_PLAYER_TASK_RESULT(game, msg):
@@ -98,10 +102,6 @@ def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
     game.world.map_.set_line(y, terrain_line)
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
-def cmd_PLAYER_POS(game, yx):
-    game.world.player_position = yx
-cmd_PLAYER_POS.argtypes = 'yx_tuple:pos'
-
 def cmd_GAME_STATE_COMPLETE(game):
     game.to_update['turn'] = True
     game.to_update['map'] = True
@@ -112,7 +112,7 @@ def cmd_THING_TYPE(game, i, type_):
 cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
 def cmd_PLAYER_INVENTORY(game, ids):
-    game.world.player_inventory = [ids]  # TODO: test whether valid IDs
+    game.world.player_inventory = ids  # TODO: test whether valid IDs
 cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
 
@@ -126,7 +126,8 @@ class Game:
                          'TURN_FINISHED': cmd_TURN_FINISHED,
                          'TURN': cmd_TURN,
                          'VISIBLE_MAP_LINE': cmd_VISIBLE_MAP_LINE,
-                         'PLAYER_POS': cmd_PLAYER_POS,
+                         'PLAYER_ID': cmd_PLAYER_ID,
+                         'PLAYER_INVENTORY': cmd_PLAYER_INVENTORY,
                          'GAME_STATE_COMPLETE': cmd_GAME_STATE_COMPLETE,
                          'MAP': cmd_MAP,
                          'THING_TYPE': cmd_THING_TYPE,
@@ -315,6 +316,29 @@ class PopUpWidget(Widget):
 class MapWidget(Widget):
 
     def draw(self):
+        if self.tui.view == 'map':
+            self.draw_map()
+        elif self.tui.view == 'inventory':
+            self.draw_inventory()
+
+    def draw_inventory(self):
+        lines = ['INVENTORY:']
+        counter = 0
+        for id_ in self.tui.game.world.player_inventory:
+            pointer = '*' if counter == self.tui.inventory_pointer else ' '
+            t = self.tui.game.world.get_thing(id_)
+            lines += ['%s %s' % (pointer, t.type_)]
+            counter += 1
+        line_width = self.size[1]
+        to_join = []
+        for line in lines:
+            to_pad = line_width - (len(line) % line_width)
+            if to_pad == line_width:
+                to_pad = 0
+            to_join += [line + ' '*to_pad]
+        self.safe_write((''.join(to_join), curses.color_pair(3)))
+
+    def draw_map(self):
 
         def terrain_with_objects():
             terrain_as_list = list(self.tui.game.world.map_.terrain[:])
@@ -363,7 +387,7 @@ class MapWidget(Widget):
             return
 
         terrain_with_objects = terrain_with_objects()
-        center = self.tui.game.world.player_position
+        center = self.tui.game.world.player.position
         lines = self.tui.game.world.map_.format_to_view(terrain_with_objects,
                                                         center, self.size)
         pad_or_cut_x(lines)
@@ -384,6 +408,7 @@ class TUI:
         self.game = game
         self.parser = Parser(self.game)
         self.to_update = {'edit': False}
+        self.inventory_pointer = 0
         curses.wrapper(self.loop)
 
     def draw_screen(self):
@@ -412,7 +437,8 @@ class TUI:
         self.popup.visible = False
         self.popup_text = 'Hi bob'
         widgets = (self.edit, self.turn, self.log, self.map_, self.popup)
-        map_mode = False
+        write_mode = True
+        self.view = 'map'
         while True:
             for w in widgets:
                 w.ensure_freshness()
@@ -429,8 +455,20 @@ class TUI:
                         w.size = w.size_def
                         w.ensure_freshness(True)
                 elif key == '\t':  # Tabulator key.
-                    map_mode = False if map_mode else True
-                elif map_mode:
+                    write_mode = False if write_mode else True
+                elif write_mode:
+                    if len(key) == 1 and key in ASCII_printable and \
+                            len(self.to_send) < len(self.edit):
+                        self.to_send += [key]
+                        self.to_update['edit'] = True
+                    elif key == 'KEY_BACKSPACE':
+                        self.to_send[:] = self.to_send[:-1]
+                        self.to_update['edit'] = True
+                    elif key == '\n':  # Return key
+                        self.socket.send(''.join(self.to_send))
+                        self.to_send[:] = []
+                        self.to_update['edit'] = True
+                elif self.view == 'map':
                     if key == 'w':
                         self.socket.send('TASK:MOVE UPLEFT')
                     elif key == 'e':
@@ -455,18 +493,35 @@ class TUI:
                             self.draw_screen()
                             for w in widgets:
                                 w.ensure_freshness(True)
-                else:
-                    if len(key) == 1 and key in ASCII_printable and \
-                            len(self.to_send) < len(self.edit):
-                        self.to_send += [key]
-                        self.to_update['edit'] = True
-                    elif key == 'KEY_BACKSPACE':
-                        self.to_send[:] = self.to_send[:-1]
-                        self.to_update['edit'] = True
-                    elif key == '\n':  # Return key
-                        self.socket.send(''.join(self.to_send))
-                        self.to_send[:] = []
-                        self.to_update['edit'] = True
+                    elif key == 'p':
+                        for t in self.game.world.things:
+                            if t == self.game.world.player or \
+                               t.id_ in self.game.world.player_inventory:
+                                continue
+                            if t.position == self.game.world.player.position:
+                                self.socket.send('TASK:PICKUP %s' % t.id_)
+                                break
+                    elif key == 'i':
+                        self.view = 'inventory'
+                        self.game.to_update['map'] = True
+                elif self.view == 'inventory':
+                    if key == 'i':
+                        self.view = 'map'
+                    elif key == 'j' and \
+                         len(self.game.world.player_inventory) > \
+                         self.inventory_pointer + 1:
+                        self.inventory_pointer += 1
+                    elif key == 'k' and self.inventory_pointer > 0:
+                        self.inventory_pointer -= 1
+                    elif key == 'd' and \
+                         len(self.game.world.player_inventory) > 0:
+                        id_ = self.game.world.player_inventory[self.inventory_pointer]
+                        self.socket.send('TASK:DROP %s' % id_)
+                        if self.inventory_pointer > 0:
+                            self.inventory_pointer -= 1
+                    else:
+                        continue
+                    self.game.to_update['map'] = True
             except curses.error:
                 pass
             if self.game.do_quit:

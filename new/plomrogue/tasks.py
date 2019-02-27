@@ -58,11 +58,10 @@ class Task_PICKUP(Task):
     def check(self):
         to_pick_up = self.thing.world.get_thing(self.args[0],
                                                 create_unfound=False)
-        if to_pick_up is None:
-            raise GameError('no thing of ID %s to pick up' % self.args[0])
-        if not (self.thing.position == to_pick_up.position or
-                tuple(to_pick_up.position) in
-                self.thing.world.map_.get_neighbors(self.thing.position)):
+        if to_pick_up is None or \
+           to_pick_up.in_inventory or \
+           to_pick_up == self.thing or \
+           self.thing.position != to_pick_up.position:
             raise GameError('thing of ID %s not in reach to pick up'
                             % self.args[0])
 
