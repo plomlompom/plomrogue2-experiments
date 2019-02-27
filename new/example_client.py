@@ -70,45 +70,50 @@ class World(WorldBase):
         super().__init__(*args, **kwargs)
         self.map_ = Map()
         self.player_position = (0, 0)
+        self.player_inventory = []
 
     def new_map(self, yx):
         self.map_ = Map(yx)
 
 
-def cmd_LAST_PLAYER_TASK_RESULT(self, msg):
+def cmd_LAST_PLAYER_TASK_RESULT(game, msg):
     if msg != "success":
-        self.log(msg)
+        game.log(msg)
 cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
 
-def cmd_TURN_FINISHED(self, n):
+def cmd_TURN_FINISHED(game, n):
     """Do nothing. (This may be extended later.)"""
     pass
 cmd_TURN_FINISHED.argtypes = 'int:nonneg'
 
-def cmd_TURN(self, n):
-    """Set self.turn to n, empty self.things."""
-    self.world.turn = n
-    self.world.things = []
-    self.to_update['turn'] = False
-    self.to_update['map'] = False
+def cmd_TURN(game, n):
+    """Set game.turn to n, empty game.things."""
+    game.world.turn = n
+    game.world.things = []
+    game.to_update['turn'] = False
+    game.to_update['map'] = False
 cmd_TURN.argtypes = 'int:nonneg'
 
-def cmd_VISIBLE_MAP_LINE(self, y, terrain_line):
-    self.world.map_.set_line(y, terrain_line)
+def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
+    game.world.map_.set_line(y, terrain_line)
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
-def cmd_PLAYER_POS(self, yx):
-    self.world.player_position = yx
+def cmd_PLAYER_POS(game, yx):
+    game.world.player_position = yx
 cmd_PLAYER_POS.argtypes = 'yx_tuple:pos'
 
-def cmd_GAME_STATE_COMPLETE(self):
-    self.to_update['turn'] = True
-    self.to_update['map'] = True
+def cmd_GAME_STATE_COMPLETE(game):
+    game.to_update['turn'] = True
+    game.to_update['map'] = True
 
 def cmd_THING_TYPE(game, i, type_):
     t = game.world.get_thing(i)
     t.type_ = type_
 cmd_THING_TYPE.argtypes = 'int:nonneg string'
+
+def cmd_PLAYER_INVENTORY(game, ids):
+    game.world.player_inventory = [ids]  # TODO: test whether valid IDs
+cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
 
 class Game:
@@ -197,6 +202,7 @@ class Widget:
         self.size_def = size  # store for re-calling .size on SIGWINCH
         self.size = size
         self.do_update = True
+        self.visible = True
 
     @property
     def size(self):
@@ -250,14 +256,16 @@ class Widget:
                 self.win.addstr(char_with_attr[0], char_with_attr[1])
 
     def ensure_freshness(self, do_refresh=False):
+        if not self.visible:
+            return
         if not do_refresh:
             for key in self.check_game:
-                if self.tui.game.to_update[key]:
+                if key in self.tui.game.to_update and self.tui.game.to_update[key]:
                     do_refresh = True
                     break
         if not do_refresh:
             for key in self.check_tui:
-                if self.tui.to_update[key]:
+                if key in self.tui.to_update and self.tui.to_update[key]:
                     do_refresh = True
                     break
         if do_refresh:
@@ -284,6 +292,24 @@ class LogWidget(Widget):
                 to_pad = 0
             to_join += [line + ' '*to_pad]
         self.safe_write((''.join(to_join), curses.color_pair(3)))
+
+
+class PopUpWidget(Widget):
+
+    def draw(self):
+        self.safe_write(self.tui.popup_text)
+
+    def reconfigure(self):
+        self.visible = True
+        size = (1, len(self.tui.popup_text))
+        self.size = size
+        self.size_def = size
+        offset_y = int((self.tui.stdscr.getmaxyx()[0] / 2) - (size[0] / 2))
+        offset_x = int((self.tui.stdscr.getmaxyx()[1] / 2) - (size[1] / 2))
+        self.start = (offset_y, offset_x)
+        self.win.mvwin(self.start[0], self.start[1])
+        self.ensure_freshness(True)
+
 
 
 class MapWidget(Widget):
@@ -360,12 +386,15 @@ class TUI:
         self.to_update = {'edit': False}
         curses.wrapper(self.loop)
 
+    def draw_screen(self):
+        self.stdscr.addstr(0, 0, 'SEND:')
+        self.stdscr.addstr(2, 0, 'TURN:')
+
     def setup_screen(self, stdscr):
         self.stdscr = stdscr
         self.stdscr.refresh()  # will be called by getkey else, clearing screen
         self.stdscr.timeout(10)
-        self.stdscr.addstr(0, 0, 'SEND:')
-        self.stdscr.addstr(2, 0, 'TURN:')
+        self.draw_screen()
 
     def loop(self, stdscr):
         self.setup_screen(stdscr)
@@ -379,7 +408,10 @@ class TUI:
         self.turn = TurnWidget(self, (2, 6), (1, 14), ['turn'])
         self.log = LogWidget(self, (4, 0), (None, 20), ['log'])
         self.map_ = MapWidget(self, (0, 21), (None, None), ['map'])
-        widgets = (self.edit, self.turn, self.log, self.map_)
+        self.popup = PopUpWidget(self, (0, 0), (1, 1), ['popup'])
+        self.popup.visible = False
+        self.popup_text = 'Hi bob'
+        widgets = (self.edit, self.turn, self.log, self.map_, self.popup)
         map_mode = False
         while True:
             for w in widgets:
@@ -411,6 +443,18 @@ class TUI:
                         self.socket.send('TASK:MOVE DOWNLEFT')
                     elif key == 'c':
                         self.socket.send('TASK:MOVE DOWNRIGHT')
+                    elif key == 't':
+                        if not self.popup.visible:
+                            self.to_update['popup'] = True
+                            self.popup.visible = True
+                            self.popup.reconfigure()
+                        else:
+                            self.popup.visible = False
+                            self.stdscr.erase()    # we'll call refresh here so
+                            self.stdscr.refresh()  # getkey doesn't, erasing screen
+                            self.draw_screen()
+                            for w in widgets:
+                                w.ensure_freshness(True)
                 else:
                     if len(key) == 1 and key in ASCII_printable and \
                             len(self.to_send) < len(self.edit):
