@@ -63,7 +63,7 @@ class ThingAnimate(Thing):
         neighbors = dijkstra_map.get_neighbors(tuple(self.position))
         n = n_max
         target_direction = None
-        for direction in neighbors:
+        for direction in sorted(neighbors.keys()):
             yx = neighbors[direction]
             if yx is not None:
                 n_new = dijkstra_map[yx]
