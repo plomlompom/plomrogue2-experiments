@@ -84,9 +84,8 @@ def cmd_SAVE(game):
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
             write(f, 'THING_POS %s %s' % (thing.id_,
                                           stringify_yx(thing.position)))
-            write(f, 'THING_INVENTORY %s %s' % (thing.id_,
-                                                ','.join([str(i) for i in
-                                                          thing.inventory])))
+            write(f, 'THING_INVENTORY %s %s' %
+                  (thing.id_,','.join([str(i) for i in thing.inventory])))
             if hasattr(thing, 'task'):
                 task = thing.task
                 if task is not None:

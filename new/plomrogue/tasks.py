@@ -76,11 +76,10 @@ class Task_DROP(Task):
     argtypes = 'int:nonneg'
 
     def check(self):
-        to_pick_up = self.thing.world.get_thing(self.args[0],
-                                                create_unfound=False)
-        if to_pick_up is None:
+        to_drop = self.thing.world.get_thing(self.args[0], create_unfound=False)
+        if to_drop is None:
             raise GameError('no thing of ID %s to drop' % self.args[0])
-        if to_pick_up.id_ not in self.thing.inventory:
+        if to_drop.id_ not in self.thing.inventory:
             raise GameError('no thing of ID %s to drop in inventory'
                             % self.args[0])
 
