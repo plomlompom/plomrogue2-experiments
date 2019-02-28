@@ -38,13 +38,13 @@ cmd_THING_TYPE.argtypes = 'int:nonneg string:thingtype'
 
 def cmd_THING_POS(game, i, yx):
     t = game.world.get_thing(i)
-    t.position = list(yx)
+    t.position = tuple(yx)
 cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
 def cmd_THING_INVENTORY(game, id_, ids):
     t = game.world.get_thing(id_)
-    t.inventory = [ids]  # TODO: test whether valid IDs
-cmd_THING_INVENTORY.argtypes = 'int:nonneg, seq:int:nonneg'
+    t.inventory = ids  # TODO: test whether valid IDs
+cmd_THING_INVENTORY.argtypes = 'int:nonneg seq:int:nonneg'
 
 def cmd_TERRAIN_LINE(game, y, terrain_line):
     game.world.map_.set_line(y, terrain_line)
@@ -84,8 +84,11 @@ def cmd_SAVE(game):
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
             write(f, 'THING_POS %s %s' % (thing.id_,
                                           stringify_yx(thing.position)))
-            write(f, 'THING_INVENTORY %s %s' %
-                  (thing.id_,','.join([str(i) for i in thing.inventory])))
+            if len(thing.inventory) > 0:
+                write(f, 'THING_INVENTORY %s %s' %
+                      (thing.id_,','.join([str(i) for i in thing.inventory])))
+            else:
+                write(f, 'THING_INVENTORY %s ,' % thing.id_)
             if hasattr(thing, 'task'):
                 task = thing.task
                 if task is not None:

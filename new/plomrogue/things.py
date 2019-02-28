@@ -5,7 +5,7 @@ from plomrogue.errors import GameError
 class ThingBase:
     type_ = '?'
 
-    def __init__(self, world, id_=None, position=[0,0]):
+    def __init__(self, world, id_=None, position=(0,0)):
         self.world = world
         self.position = position
         if id_ is None:

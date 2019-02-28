@@ -48,7 +48,7 @@ class Task_MOVE(Task):
                                                          self.args[0])
         for id_ in self.thing.inventory:
             t = self.thing.world.get_thing(id_)
-            t.position[:] = self.thing.position
+            t.position = self.thing.position
 
 
 

@@ -2,6 +2,7 @@ from plomrogue.tasks import Task_WAIT, Task_MOVE, Task_PICKUP, Task_DROP
 from plomrogue.errors import ArgError
 from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE, cmd_MAP,
                                 cmd_MAP, cmd_THING_TYPE, cmd_THING_POS,
+                                cmd_THING_INVENTORY,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID, cmd_TURN,
                                 cmd_SWITCH_PLAYER, cmd_SAVE)
 from plomrogue.mapping import MapHex
@@ -77,8 +78,8 @@ class World(WorldBase):
 
         def add_thing(type_):
             t = self.game.thing_types[type_](self)
-            t.position = [random.randint(0, yx[0] -1),
-                          random.randint(0, yx[1] - 1)]
+            t.position = (random.randint(0, yx[0] -1),
+                          random.randint(0, yx[1] - 1))
             self.things += [t]
             return t
 
@@ -116,6 +117,7 @@ class Game:
                          'MAP': cmd_MAP,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS,
+                         'THING_INVENTORY': cmd_THING_INVENTORY,
                          'TERRAIN_LINE': cmd_TERRAIN_LINE,
                          'PLAYER_ID': cmd_PLAYER_ID,
                          'TURN': cmd_TURN,

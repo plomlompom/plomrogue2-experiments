@@ -43,7 +43,7 @@ class Map(MapBase):
         """Iterate over YX position coordinates."""
         for y in range(self.size[0]):
             for x in range(self.size[1]):
-                yield [y, x]
+                yield (y, x)
 
     def lines(self):
         width = self.size[1]
@@ -96,20 +96,20 @@ class Map(MapBase):
 class MapWithLeftRightMoves(Map):
 
     def move_LEFT(self, start_pos):
-        return [start_pos[0], start_pos[1] - 1]
+        return (start_pos[0], start_pos[1] - 1)
 
     def move_RIGHT(self, start_pos):
-        return [start_pos[0], start_pos[1] + 1]
+        return (start_pos[0], start_pos[1] + 1)
 
 
 
 class MapSquare(MapWithLeftRightMoves):
 
     def move_UP(self, start_pos):
-        return [start_pos[0] - 1, start_pos[1]]
+        return (start_pos[0] - 1, start_pos[1])
 
     def move_DOWN(self, start_pos):
-        return [start_pos[0] + 1, start_pos[1]]
+        return (start_pos[0] + 1, start_pos[1])
 
 
 
@@ -121,27 +121,27 @@ class MapHex(MapWithLeftRightMoves):
 
     def move_UPLEFT(self, start_pos):
         if start_pos[0] % 2 == 1:
-            return [start_pos[0] - 1, start_pos[1] - 1]
+            return (start_pos[0] - 1, start_pos[1] - 1)
         else:
-            return [start_pos[0] - 1, start_pos[1]]
+            return (start_pos[0] - 1, start_pos[1])
 
     def move_UPRIGHT(self, start_pos):
         if start_pos[0] % 2 == 1:
-            return [start_pos[0] - 1, start_pos[1]]
+            return (start_pos[0] - 1, start_pos[1])
         else:
-            return [start_pos[0] - 1, start_pos[1] + 1]
+            return (start_pos[0] - 1, start_pos[1] + 1)
 
     def move_DOWNLEFT(self, start_pos):
         if start_pos[0] % 2 == 1:
-             return [start_pos[0] + 1, start_pos[1] - 1]
+             return (start_pos[0] + 1, start_pos[1] - 1)
         else:
-               return [start_pos[0] + 1, start_pos[1]]
+               return (start_pos[0] + 1, start_pos[1])
 
     def move_DOWNRIGHT(self, start_pos):
         if start_pos[0] % 2 == 1:
-            return [start_pos[0] + 1, start_pos[1]]
+            return (start_pos[0] + 1, start_pos[1])
         else:
-            return [start_pos[0] + 1, start_pos[1] + 1]
+            return (start_pos[0] + 1, start_pos[1] + 1)
 
 
 
@@ -225,11 +225,11 @@ class FovMap:
     def basic_circle_out_move(self, pos, direction):
         """Move position pos into direction. Return whether still in map."""
         mover = getattr(self, 'move_' + direction)
-        pos[:] = mover(pos)
+        pos = mover(pos)
         if pos[0] < 0 or pos[1] < 0 or \
             pos[0] >= self.size[0] or pos[1] >= self.size[1]:
-            return False
-        return True
+            return pos, False
+        return pos, True
 
     def circle_out(self, yx, f):
         # Optimization potential: Precalculate movement positions. (How to check
@@ -246,11 +246,12 @@ class FovMap:
         #print('DEBUG CIRCLE_OUT', yx)
         while circle_in_map:
             circle_in_map = False
-            self.basic_circle_out_move(yx, 'RIGHT')
+            yx, _ = self.basic_circle_out_move(yx, 'RIGHT')
             for dir_i in range(len(self.circle_out_directions)):
                 for dir_progress in range(distance):
                     direction = self.circle_out_directions[dir_i]
-                    if self.circle_out_move(yx, direction):
+                    yx, test = self.circle_out_move(yx, direction)
+                    if test:
                         f(yx, distance, dir_i, dir_progress)
                         circle_in_map = True
             distance += 1
