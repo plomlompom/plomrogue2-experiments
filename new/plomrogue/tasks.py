@@ -59,9 +59,7 @@ class Task_PICKUP(Task):
         to_pick_up = self.thing.world.get_thing(self.args[0],
                                                 create_unfound=False)
         if to_pick_up is None or \
-           to_pick_up.in_inventory or \
-           to_pick_up == self.thing or \
-           self.thing.position != to_pick_up.position:
+           to_pick_up.id_ not in self.thing.get_pickable_items():
             raise GameError('thing of ID %s not in reach to pick up'
                             % self.args[0])
 
@@ -69,6 +67,7 @@ class Task_PICKUP(Task):
         to_pick_up = self.thing.world.get_thing(self.args[0])
         self.thing.inventory += [self.args[0]]
         to_pick_up.in_inventory = True
+        to_pick_up.position = self.thing.position
 
 
 

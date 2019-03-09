@@ -149,6 +149,16 @@ class ThingAnimate(Thing):
                 visible_things += [thing]
         return visible_things
 
+    def get_pickable_items(self):
+        pickable_ids = []
+        for t in [t for t in self.get_visible_things() if
+                  isinstance(t, ThingItem) and
+                  (t.position == self.position or
+                   t.position in
+                   self.world.map_.get_neighbors(self.position).values())]:
+            pickable_ids += [t.id_]
+        return pickable_ids
+
 
 
 class ThingHuman(ThingAnimate):

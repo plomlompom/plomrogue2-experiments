@@ -2,7 +2,7 @@ from plomrogue.tasks import Task_WAIT, Task_MOVE, Task_PICKUP, Task_DROP
 from plomrogue.errors import ArgError
 from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE, cmd_MAP,
                                 cmd_MAP, cmd_THING_TYPE, cmd_THING_POS,
-                                cmd_THING_INVENTORY,
+                                cmd_THING_INVENTORY, cmd_GET_PICKABLE_ITEMS,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID, cmd_TURN,
                                 cmd_SWITCH_PLAYER, cmd_SAVE)
 from plomrogue.mapping import MapHex
@@ -119,6 +119,7 @@ class Game:
                          'THING_POS': cmd_THING_POS,
                          'THING_INVENTORY': cmd_THING_INVENTORY,
                          'TERRAIN_LINE': cmd_TERRAIN_LINE,
+                         'GET_PICKABLE_ITEMS': cmd_GET_PICKABLE_ITEMS,
                          'PLAYER_ID': cmd_PLAYER_ID,
                          'TURN': cmd_TURN,
                          'SWITCH_PLAYER': cmd_SWITCH_PLAYER,

@@ -46,6 +46,14 @@ def cmd_THING_INVENTORY(game, id_, ids):
     t.inventory = ids  # TODO: test whether valid IDs
 cmd_THING_INVENTORY.argtypes = 'int:nonneg seq:int:nonneg'
 
+def cmd_GET_PICKABLE_ITEMS(game, connection_id):
+    pickable_ids = game.world.player.get_pickable_items()
+    if len(pickable_ids) > 0:
+        game.io.send('PICKABLE_ITEMS %s' %
+                     ','.join([str(id_) for id_ in pickable_ids]))
+    else:
+        game.io.send('PICKABLE_ITEMS ,')
+
 def cmd_TERRAIN_LINE(game, y, terrain_line):
     game.world.map_.set_line(y, terrain_line)
 cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'

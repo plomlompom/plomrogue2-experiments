@@ -71,6 +71,7 @@ class World(WorldBase):
         self.map_ = Map()
         self.player_inventory = []
         self.player_id = 0
+        self.pickable_items = []
 
     def new_map(self, yx):
         self.map_ = Map(yx)
@@ -94,6 +95,7 @@ def cmd_TURN(game, n):
     """Set game.turn to n, empty game.things."""
     game.world.turn = n
     game.world.things = []
+    game.world.pickable_items = []
     game.to_update['turn'] = False
     game.to_update['map'] = False
 cmd_TURN.argtypes = 'int:nonneg'
@@ -115,6 +117,11 @@ def cmd_PLAYER_INVENTORY(game, ids):
     game.world.player_inventory = ids  # TODO: test whether valid IDs
 cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
+def cmd_PICKABLE_ITEMS(game, ids):
+    game.world.pickable_items = ids
+    game.to_update['map'] = True
+cmd_PICKABLE_ITEMS.argtypes = 'seq:int:nonneg'
+
 
 class Game:
 
@@ -130,6 +137,7 @@ class Game:
                          'PLAYER_INVENTORY': cmd_PLAYER_INVENTORY,
                          'GAME_STATE_COMPLETE': cmd_GAME_STATE_COMPLETE,
                          'MAP': cmd_MAP,
+                         'PICKABLE_ITEMS': cmd_PICKABLE_ITEMS,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS}
         self.log_text = ''
@@ -139,6 +147,7 @@ class Game:
             'turn': True,
             }
         self.do_quit = False
+        self.to_update_lock = False
 
     def get_command(self, command_name):
         from functools import partial
@@ -153,6 +162,7 @@ class Game:
         return None
 
     def handle_input(self, msg):
+        self.log(msg)
         if msg == 'BYE':
             self.do_quit = True
             return
@@ -319,13 +329,17 @@ class MapWidget(Widget):
         if self.tui.view == 'map':
             self.draw_map()
         elif self.tui.view == 'inventory':
-            self.draw_inventory()
+            self.draw_item_selector('INVENTORY:',
+                                    self.tui.game.world.player_inventory)
+        elif self.tui.view == 'pickable_items':
+            self.draw_item_selector('PICKABLE:',
+                                    self.tui.game.world.pickable_items)
 
-    def draw_inventory(self):
-        lines = ['INVENTORY:']
+    def draw_item_selector(self, title, selection):
+        lines = [title]
         counter = 0
-        for id_ in self.tui.game.world.player_inventory:
-            pointer = '*' if counter == self.tui.inventory_pointer else ' '
+        for id_ in selection:
+            pointer = '*' if counter == self.tui.item_pointer else ' '
             t = self.tui.game.world.get_thing(id_)
             lines += ['%s %s' % (pointer, t.type_)]
             counter += 1
@@ -408,7 +422,7 @@ class TUI:
         self.game = game
         self.parser = Parser(self.game)
         self.to_update = {'edit': False}
-        self.inventory_pointer = 0
+        self.item_pointer = 0
         curses.wrapper(self.loop)
 
     def draw_screen(self):
@@ -494,31 +508,45 @@ class TUI:
                             for w in widgets:
                                 w.ensure_freshness(True)
                     elif key == 'p':
-                        for t in self.game.world.things:
-                            if t == self.game.world.player or \
-                               t.id_ in self.game.world.player_inventory:
-                                continue
-                            if t.position == self.game.world.player.position:
-                                self.socket.send('TASK:PICKUP %s' % t.id_)
-                                break
+                        self.socket.send('GET_PICKABLE_ITEMS')
+                        self.item_pointer = 0
+                        self.view = 'pickable_items'
                     elif key == 'i':
+                        self.item_pointer = 0
                         self.view = 'inventory'
                         self.game.to_update['map'] = True
+                elif self.view == 'pickable_items':
+                    if key == 'c':
+                        self.view = 'map'
+                    elif key == 'j' and \
+                         len(self.game.world.pickable_items) > \
+                         self.item_pointer + 1:
+                        self.item_pointer += 1
+                    elif key == 'k' and self.item_pointer > 0:
+                        self.item_pointer -= 1
+                    elif key == 'p' and \
+                         len(self.game.world.pickable_items) > 0:
+                        id_ = self.game.world.pickable_items[self.item_pointer]
+                        self.socket.send('TASK:PICKUP %s' % id_)
+                        self.view = 'map'
+                    else:
+                        continue
+                    self.game.to_update['map'] = True
                 elif self.view == 'inventory':
-                    if key == 'i':
+                    if key == 'c':
                         self.view = 'map'
                     elif key == 'j' and \
                          len(self.game.world.player_inventory) > \
-                         self.inventory_pointer + 1:
-                        self.inventory_pointer += 1
-                    elif key == 'k' and self.inventory_pointer > 0:
-                        self.inventory_pointer -= 1
+                         self.item_pointer + 1:
+                        self.item_pointer += 1
+                    elif key == 'k' and self.item_pointer > 0:
+                        self.item_pointer -= 1
                     elif key == 'd' and \
                          len(self.game.world.player_inventory) > 0:
-                        id_ = self.game.world.player_inventory[self.inventory_pointer]
+                        id_ = self.game.world.player_inventory[self.item_pointer]
                         self.socket.send('TASK:DROP %s' % id_)
-                        if self.inventory_pointer > 0:
-                            self.inventory_pointer -= 1
+                        if self.item_pointer > 0:
+                            self.item_pointer -= 1
                     else:
                         continue
                     self.game.to_update['map'] = True
