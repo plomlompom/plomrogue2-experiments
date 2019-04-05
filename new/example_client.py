@@ -524,11 +524,14 @@ class TUI:
                         self.view = 'inventory'
                         self.to_update['map'] = True
                 elif self.view == 'pickable_items':
+                    if len(self.game.world.pickable_items) < self.item_pointer + 1\
+                       and self.item_pointer > 0:
+                        self.item_pointer = len(self.game.world.pickable_items) - 1
+                    while len(self.game.world.pickable_items) <= self.item_pointer:
+                        self.item_pointer -= 1
                     if key == 'c':
                         self.view = 'map'
-                    elif key == 'j' and \
-                         len(self.game.world.pickable_items) > \
-                         self.item_pointer + 1:
+                    elif key == 'j':
                         self.item_pointer += 1
                     elif key == 'k' and self.item_pointer > 0:
                         self.item_pointer -= 1
@@ -543,11 +546,12 @@ class TUI:
                         continue
                     self.to_update['map'] = True
                 elif self.view == 'inventory':
+                    if len(self.game.world.player_inventory) < self.item_pointer + 1\
+                       and self.item_pointer > 0:
+                        self.item_pointer = len(self.game.world.player_inventory) - 1
                     if key == 'c':
                         self.view = 'map'
-                    elif key == 'j' and \
-                         len(self.game.world.player_inventory) > \
-                         self.item_pointer + 1:
+                    elif key == 'j':
                         self.item_pointer += 1
                     elif key == 'k' and self.item_pointer > 0:
                         self.item_pointer -= 1
