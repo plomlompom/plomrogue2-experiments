@@ -259,19 +259,21 @@ class Widget:
                 self.win.addstr(char_with_attr[0], char_with_attr[1])
 
     def ensure_freshness(self, do_refresh=False):
-        if not self.visible:
-            return
-        if not do_refresh:
-            for key in self.check_updates:
-                if key in self.tui.to_update and self.tui.to_update[key]:
-                    do_refresh = True
-                    break
-        if do_refresh:
-            self.win.erase()
-            self.draw()
-            self.win.refresh()
-        for child in self.children:
-            child.ensure_freshness(do_refresh)
+        did_refresh = False
+        if self.visible:
+            if not do_refresh:
+                for key in self.check_updates:
+                    if key in self.tui.to_update and self.tui.to_update[key]:
+                        do_refresh = True
+                        break
+            if do_refresh:
+                self.win.erase()
+                self.draw()
+                self.win.refresh()
+                did_refresh = True
+            for child in self.children:
+                did_refresh = child.ensure_freshness(do_refresh) | did_refresh
+        return did_refresh
 
 
 class EditWidget(Widget):
@@ -308,7 +310,6 @@ class PopUpWidget(Widget):
         offset_x = int((self.tui.stdscr.getmaxyx()[1] / 2) - (size[1] / 2))
         self.start = (offset_y, offset_x)
         self.win.mvwin(self.start[0], self.start[1])
-        self.ensure_freshness(True)
 
 
 class MapWidget(Widget):
@@ -423,7 +424,6 @@ class TUI:
         self.parser = Parser(self.game)
         self.to_update = {}
         self.item_pointer = 0
-        self.top_widgets = []
         curses.wrapper(self.loop)
 
     def setup_screen(self, stdscr):
@@ -446,18 +446,22 @@ class TUI:
         turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
         log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
-        popup_widget = PopUpWidget(self, (0, 0), (1, 1), ['popup'])
+        top_widgets = [edit_widget, turn_widget, log_widget, map_widget]
+        popup_widget = PopUpWidget(self, (0, 0), (1, 1))
         popup_widget.visible = False
         self.popup_text = 'Hi bob'
-        self.top_widgets = [edit_widget, turn_widget, log_widget, map_widget,
-                            popup_widget]
         write_mode = True
         self.view = 'map'
-        for w in self.top_widgets:
+        for w in top_widgets:
             w.ensure_freshness(True)
+        draw_popup_if_visible = True
         while True:
-            for w in self.top_widgets:
-                w.ensure_freshness()
+            for w in top_widgets:
+                did_refresh = w.ensure_freshness()
+                draw_popup_if_visible = did_refresh | draw_popup_if_visible
+            if popup_widget.visible and draw_popup_if_visible:
+                popup_widget.ensure_freshness(True)
+                draw_popup_if_visible = False
             for k in self.to_update.keys():
                 self.to_update[k] = False
             while True:
@@ -471,7 +475,7 @@ class TUI:
                 if key == 'KEY_RESIZE':
                     curses.endwin()
                     self.setup_screen(curses.initscr())
-                    for w in self.top_widgets:
+                    for w in top_widgets:
                         w.size = w.size_def
                         w.ensure_freshness(True)
                 elif key == '\t':  # Tabulator key.
@@ -506,9 +510,10 @@ class TUI:
                             self.to_update['popup'] = True
                             popup_widget.visible = True
                             popup_widget.reconfigure()
+                            draw_popup_if_visible = True
                         else:
                             popup_widget.visible = False
-                            for w in self.top_widgets:
+                            for w in top_widgets:
                                 w.ensure_freshness(True)
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
