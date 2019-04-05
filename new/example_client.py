@@ -9,6 +9,7 @@ from plomrogue.mapping import MapBase
 from plomrogue.io import PlomSocket
 from plomrogue.things import ThingBase
 import types
+import queue
 
 
 class Map(MapBase):
@@ -96,8 +97,6 @@ def cmd_TURN(game, n):
     game.world.turn = n
     game.world.things = []
     game.world.pickable_items = []
-    game.to_update['turn'] = False
-    game.to_update['map'] = False
 cmd_TURN.argtypes = 'int:nonneg'
 
 def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
@@ -105,8 +104,8 @@ def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
 def cmd_GAME_STATE_COMPLETE(game):
-    game.to_update['turn'] = True
-    game.to_update['map'] = True
+    game.tui.to_update['turn'] = True
+    game.tui.to_update['map'] = True
 
 def cmd_THING_TYPE(game, i, type_):
     t = game.world.get_thing(i)
@@ -119,7 +118,7 @@ cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
 def cmd_PICKABLE_ITEMS(game, ids):
     game.world.pickable_items = ids
-    game.to_update['map'] = True
+    game.tui.to_update['map'] = True
 cmd_PICKABLE_ITEMS.argtypes = 'seq:int:nonneg'
 
 
@@ -141,13 +140,8 @@ class Game:
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS}
         self.log_text = ''
-        self.to_update = {
-            'log': True,
-            'map': True,
-            'turn': True,
-            }
         self.do_quit = False
-        self.to_update_lock = False
+        self.tui = None
 
     def get_command(self, command_name):
         from functools import partial
@@ -170,17 +164,15 @@ class Game:
             command, args = self.parser.parse(msg)
             if command is None:
                 self.log('UNHANDLED INPUT: ' + msg)
-                self.to_update['log'] = True
             else:
                 command(*args)
         except ArgError as e:
             self.log('ARGUMENT ERROR: ' + msg + '\n' + str(e))
-            self.to_update['log'] = True
 
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
-        self.to_update['log'] = True
+        self.tui.to_update['log'] = True
 
     def symbol_for_type(self, type_):
         symbol = '?'
@@ -197,16 +189,15 @@ ASCII_printable = ' !"#$%&\'\(\)*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWX'
                   'YZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~'
 
 
-def recv_loop(plom_socket, game):
+def recv_loop(plom_socket, game, q):
     for msg in plom_socket.recv():
-        game.handle_input(msg)
+        q.put(msg)
 
 
 class Widget:
 
-    def __init__(self, tui, start, size, check_game=[], check_tui=[]):
-        self.check_game = check_game
-        self.check_tui = check_tui
+    def __init__(self, tui, start, size, check_updates=[]):
+        self.check_updates = check_updates
         self.tui = tui
         self.start = start
         self.win = curses.newwin(1, 1, self.start[0], self.start[1])
@@ -214,6 +205,7 @@ class Widget:
         self.size = size
         self.do_update = True
         self.visible = True
+        self.children = []
 
     @property
     def size(self):
@@ -270,12 +262,7 @@ class Widget:
         if not self.visible:
             return
         if not do_refresh:
-            for key in self.check_game:
-                if key in self.tui.game.to_update and self.tui.game.to_update[key]:
-                    do_refresh = True
-                    break
-        if not do_refresh:
-            for key in self.check_tui:
+            for key in self.check_updates:
                 if key in self.tui.to_update and self.tui.to_update[key]:
                     do_refresh = True
                     break
@@ -283,6 +270,8 @@ class Widget:
             self.win.erase()
             self.draw()
             self.win.refresh()
+        for child in self.children:
+            child.ensure_freshness(do_refresh)
 
 
 class EditWidget(Widget):
@@ -320,7 +309,6 @@ class PopUpWidget(Widget):
         self.start = (offset_y, offset_x)
         self.win.mvwin(self.start[0], self.start[1])
         self.ensure_freshness(True)
-
 
 
 class MapWidget(Widget):
@@ -415,25 +403,33 @@ class TurnWidget(Widget):
         self.safe_write((str(self.tui.game.world.turn), curses.color_pair(2)))
 
 
+class TextLineWidget(Widget):
+
+    def __init__(self, text_line, *args, **kwargs):
+        self.text_line = text_line
+        super().__init__(*args, **kwargs)
+
+    def draw(self):
+        self.safe_write(self.text_line)
+
+
 class TUI:
 
-    def __init__(self, plom_socket, game):
+    def __init__(self, plom_socket, game, q):
         self.socket = plom_socket
         self.game = game
+        self.game.tui = self
+        self.queue = q
         self.parser = Parser(self.game)
-        self.to_update = {'edit': False}
+        self.to_update = {}
         self.item_pointer = 0
+        self.top_widgets = []
         curses.wrapper(self.loop)
-
-    def draw_screen(self):
-        self.stdscr.addstr(0, 0, 'SEND:')
-        self.stdscr.addstr(2, 0, 'TURN:')
 
     def setup_screen(self, stdscr):
         self.stdscr = stdscr
         self.stdscr.refresh()  # will be called by getkey else, clearing screen
         self.stdscr.timeout(10)
-        self.draw_screen()
 
     def loop(self, stdscr):
         self.setup_screen(stdscr)
@@ -443,36 +439,46 @@ class TUI:
         curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
         curses.curs_set(False)  # hide cursor
         self.to_send = []
-        self.edit = EditWidget(self, (0, 6), (1, 14), check_tui = ['edit'])
-        self.turn = TurnWidget(self, (2, 6), (1, 14), ['turn'])
-        self.log = LogWidget(self, (4, 0), (None, 20), ['log'])
-        self.map_ = MapWidget(self, (0, 21), (None, None), ['map'])
-        self.popup = PopUpWidget(self, (0, 0), (1, 1), ['popup'])
-        self.popup.visible = False
+        edit_widget = TextLineWidget('SEND:', self, (0, 0), (1, 20))
+        edit_line_widget = EditWidget(self, (0, 6), (1, 14), ['edit'])
+        edit_widget.children += [edit_line_widget]
+        turn_widget = TextLineWidget('TURN:', self, (2, 0), (1, 20))
+        turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
+        log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
+        map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
+        popup_widget = PopUpWidget(self, (0, 0), (1, 1), ['popup'])
+        popup_widget.visible = False
         self.popup_text = 'Hi bob'
-        widgets = (self.edit, self.turn, self.log, self.map_, self.popup)
+        self.top_widgets = [edit_widget, turn_widget, log_widget, map_widget,
+                            popup_widget]
         write_mode = True
         self.view = 'map'
+        for w in self.top_widgets:
+            w.ensure_freshness(True)
         while True:
-            for w in widgets:
+            for w in self.top_widgets:
                 w.ensure_freshness()
-            for key in self.game.to_update:
-                self.game.to_update[key] = False
-            for key in self.to_update:
-                self.to_update[key] = False
+            for k in self.to_update.keys():
+                self.to_update[k] = False
+            while True:
+                try:
+                    command = self.queue.get(block=False)
+                except queue.Empty:
+                    break
+                self.game.handle_input(command)
             try:
                 key = self.stdscr.getkey()
                 if key == 'KEY_RESIZE':
                     curses.endwin()
                     self.setup_screen(curses.initscr())
-                    for w in widgets:
+                    for w in self.top_widgets:
                         w.size = w.size_def
                         w.ensure_freshness(True)
                 elif key == '\t':  # Tabulator key.
                     write_mode = False if write_mode else True
                 elif write_mode:
                     if len(key) == 1 and key in ASCII_printable and \
-                            len(self.to_send) < len(self.edit):
+                            len(self.to_send) < len(edit_line_widget):
                         self.to_send += [key]
                         self.to_update['edit'] = True
                     elif key == 'KEY_BACKSPACE':
@@ -496,16 +502,13 @@ class TUI:
                     elif key == 'c':
                         self.socket.send('TASK:MOVE DOWNRIGHT')
                     elif key == 't':
-                        if not self.popup.visible:
+                        if not popup_widget.visible:
                             self.to_update['popup'] = True
-                            self.popup.visible = True
-                            self.popup.reconfigure()
+                            popup_widget.visible = True
+                            popup_widget.reconfigure()
                         else:
-                            self.popup.visible = False
-                            self.stdscr.erase()    # we'll call refresh here so
-                            self.stdscr.refresh()  # getkey doesn't, erasing screen
-                            self.draw_screen()
-                            for w in widgets:
+                            popup_widget.visible = False
+                            for w in self.top_widgets:
                                 w.ensure_freshness(True)
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
@@ -514,7 +517,7 @@ class TUI:
                     elif key == 'i':
                         self.item_pointer = 0
                         self.view = 'inventory'
-                        self.game.to_update['map'] = True
+                        self.to_update['map'] = True
                 elif self.view == 'pickable_items':
                     if key == 'c':
                         self.view = 'map'
@@ -528,10 +531,12 @@ class TUI:
                          len(self.game.world.pickable_items) > 0:
                         id_ = self.game.world.pickable_items[self.item_pointer]
                         self.socket.send('TASK:PICKUP %s' % id_)
-                        self.view = 'map'
+                        self.socket.send('GET_PICKABLE_ITEMS')
+                        if self.item_pointer > 0:
+                            self.item_pointer -= 1
                     else:
                         continue
-                    self.game.to_update['map'] = True
+                    self.to_update['map'] = True
                 elif self.view == 'inventory':
                     if key == 'c':
                         self.view = 'map'
@@ -549,7 +554,7 @@ class TUI:
                             self.item_pointer -= 1
                     else:
                         continue
-                    self.game.to_update['map'] = True
+                    self.to_update['map'] = True
             except curses.error:
                 pass
             if self.game.do_quit:
@@ -559,6 +564,7 @@ class TUI:
 s = socket.create_connection(('127.0.0.1', 5000))
 plom_socket = PlomSocket(s)
 game = Game()
-t = threading.Thread(target=recv_loop, args=(plom_socket, game))
+q = queue.Queue()
+t = threading.Thread(target=recv_loop, args=(plom_socket, game, q))
 t.start()
-TUI(plom_socket, game)
+TUI(plom_socket, game, q)
