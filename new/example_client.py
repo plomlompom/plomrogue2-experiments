@@ -532,6 +532,16 @@ class TUI:
                         self.socket.send(''.join(self.to_send))
                         self.to_send[:] = []
                         self.to_update['edit'] = True
+                elif key == 't':
+                    if not popup_widget.visible:
+                        self.to_update['popup'] = True
+                        popup_widget.visible = True
+                        popup_widget.reconfigure()
+                        draw_popup_if_visible = True
+                    else:
+                        popup_widget.visible = False
+                        for w in top_widgets:
+                            w.ensure_freshness(True)
                 elif map_widget.visible:
                     if key == 'w':
                         self.socket.send('TASK:MOVE UPLEFT')
@@ -545,16 +555,6 @@ class TUI:
                         self.socket.send('TASK:MOVE DOWNLEFT')
                     elif key == 'c':
                         self.socket.send('TASK:MOVE DOWNRIGHT')
-                    elif key == 't':
-                        if not popup_widget.visible:
-                            self.to_update['popup'] = True
-                            popup_widget.visible = True
-                            popup_widget.reconfigure()
-                            draw_popup_if_visible = True
-                        else:
-                            popup_widget.visible = False
-                            for w in top_widgets:
-                                w.ensure_freshness(True)
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
                         self.item_pointer = 0
