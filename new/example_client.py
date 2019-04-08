@@ -106,6 +106,7 @@ cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 def cmd_GAME_STATE_COMPLETE(game):
     game.tui.to_update['turn'] = True
     game.tui.to_update['map'] = True
+    game.tui.to_update['inventory'] = True
 
 def cmd_THING_TYPE(game, i, type_):
     t = game.world.get_thing(i)
@@ -118,7 +119,7 @@ cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
 def cmd_PICKABLE_ITEMS(game, ids):
     game.world.pickable_items = ids
-    game.tui.to_update['map'] = True
+    game.tui.to_update['pickable_items'] = True
 cmd_PICKABLE_ITEMS.argtypes = 'seq:int:nonneg'
 
 
@@ -196,7 +197,7 @@ def recv_loop(plom_socket, game, q):
 
 class Widget:
 
-    def __init__(self, tui, start, size, check_updates=[]):
+    def __init__(self, tui, start, size, check_updates=[], visible=True):
         self.check_updates = check_updates
         self.tui = tui
         self.start = start
@@ -204,7 +205,7 @@ class Widget:
         self.size_def = size  # store for re-calling .size on SIGWINCH
         self.size = size
         self.do_update = True
-        self.visible = True
+        self.visible = visible
         self.children = []
 
     @property
@@ -312,17 +313,7 @@ class PopUpWidget(Widget):
         self.win.mvwin(self.start[0], self.start[1])
 
 
-class MapWidget(Widget):
-
-    def draw(self):
-        if self.tui.view == 'map':
-            self.draw_map()
-        elif self.tui.view == 'inventory':
-            self.draw_item_selector('INVENTORY:',
-                                    self.tui.game.world.player_inventory)
-        elif self.tui.view == 'pickable_items':
-            self.draw_item_selector('PICKABLE:',
-                                    self.tui.game.world.pickable_items)
+class ItemsSelectorWidget(Widget):
 
     def draw_item_selector(self, title, selection):
         lines = [title]
@@ -341,7 +332,23 @@ class MapWidget(Widget):
             to_join += [line + ' '*to_pad]
         self.safe_write((''.join(to_join), curses.color_pair(3)))
 
-    def draw_map(self):
+
+class InventoryWidget(ItemsSelectorWidget):
+
+    def draw(self):
+        self.draw_item_selector('INVENTORY:',
+                                self.tui.game.world.player_inventory)
+
+class PickableItemsWidget(ItemsSelectorWidget):
+
+    def draw(self):
+        self.draw_item_selector('PICKABLE:',
+                                self.tui.game.world.pickable_items)
+
+
+class MapWidget(Widget):
+
+    def draw(self):
 
         def terrain_with_objects():
             terrain_as_list = list(self.tui.game.world.map_.terrain[:])
@@ -431,6 +438,12 @@ class TUI:
         self.stdscr.refresh()  # will be called by getkey else, clearing screen
         self.stdscr.timeout(10)
 
+    def switch_widgets(self, widget_1, widget_2):
+        widget_1.visible = False
+        widget_2.visible = True
+        x = widget_2.check_updates[0]
+        self.to_update[x] = True
+
     def loop(self, stdscr):
         self.setup_screen(stdscr)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
@@ -446,12 +459,15 @@ class TUI:
         turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
         log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
-        top_widgets = [edit_widget, turn_widget, log_widget, map_widget]
-        popup_widget = PopUpWidget(self, (0, 0), (1, 1))
-        popup_widget.visible = False
+        inventory_widget = InventoryWidget(self, (0, 21), (None, None),
+                                           ['inventory'], False)
+        pickable_items_widget = PickableItemsWidget(self, (0, 21), (None, None),
+                                                    ['pickable_items'], False)
+        top_widgets = [edit_widget, turn_widget, log_widget, map_widget,
+                       inventory_widget, pickable_items_widget]
+        popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
         self.popup_text = 'Hi bob'
         write_mode = True
-        self.view = 'map'
         for w in top_widgets:
             w.ensure_freshness(True)
         draw_popup_if_visible = True
@@ -492,7 +508,7 @@ class TUI:
                         self.socket.send(''.join(self.to_send))
                         self.to_send[:] = []
                         self.to_update['edit'] = True
-                elif self.view == 'map':
+                elif map_widget.visible:
                     if key == 'w':
                         self.socket.send('TASK:MOVE UPLEFT')
                     elif key == 'e':
@@ -518,19 +534,18 @@ class TUI:
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
                         self.item_pointer = 0
-                        self.view = 'pickable_items'
+                        self.switch_widgets(map_widget, pickable_items_widget)
                     elif key == 'i':
                         self.item_pointer = 0
-                        self.view = 'inventory'
-                        self.to_update['map'] = True
-                elif self.view == 'pickable_items':
+                        self.switch_widgets(map_widget, inventory_widget)
+                elif pickable_items_widget.visible:
                     if len(self.game.world.pickable_items) < self.item_pointer + 1\
                        and self.item_pointer > 0:
                         self.item_pointer = len(self.game.world.pickable_items) - 1
                     while len(self.game.world.pickable_items) <= self.item_pointer:
                         self.item_pointer -= 1
                     if key == 'c':
-                        self.view = 'map'
+                        self.switch_widgets(pickable_items_widget, map_widget)
                     elif key == 'j':
                         self.item_pointer += 1
                     elif key == 'k' and self.item_pointer > 0:
@@ -544,13 +559,13 @@ class TUI:
                             self.item_pointer -= 1
                     else:
                         continue
-                    self.to_update['map'] = True
-                elif self.view == 'inventory':
+                    self.to_update['pickable_items'] = True
+                elif inventory_widget.visible:
                     if len(self.game.world.player_inventory) < self.item_pointer + 1\
                        and self.item_pointer > 0:
                         self.item_pointer = len(self.game.world.player_inventory) - 1
                     if key == 'c':
-                        self.view = 'map'
+                        self.switch_widgets(inventory_widget, map_widget)
                     elif key == 'j':
                         self.item_pointer += 1
                     elif key == 'k' and self.item_pointer > 0:
@@ -563,7 +578,7 @@ class TUI:
                             self.item_pointer -= 1
                     else:
                         continue
-                    self.to_update['map'] = True
+                    self.to_update['inventory'] = True
             except curses.error:
                 pass
             if self.game.do_quit:
