@@ -433,19 +433,43 @@ class TUI:
         self.item_pointer = 0
         curses.wrapper(self.loop)
 
-    def setup_screen(self, stdscr):
-        self.stdscr = stdscr
-        self.stdscr.refresh()  # will be called by getkey else, clearing screen
-        self.stdscr.timeout(10)
-
-    def switch_widgets(self, widget_1, widget_2):
-        widget_1.visible = False
-        widget_2.visible = True
-        x = widget_2.check_updates[0]
-        self.to_update[x] = True
-
     def loop(self, stdscr):
-        self.setup_screen(stdscr)
+
+        def setup_screen(stdscr):
+            self.stdscr = stdscr
+            self.stdscr.refresh()  # will be called by getkey else, clearing screen
+            self.stdscr.timeout(10)
+
+        def switch_widgets(widget_1, widget_2):
+            widget_1.visible = False
+            widget_2.visible = True
+            trigger = widget_2.check_updates[0]
+            self.to_update[trigger] = True
+
+        def pick_or_drop_menu(action_key, widget, selectables, task,
+                              bonus_command=None):
+            if len(selectables) < self.item_pointer + 1 and\
+               self.item_pointer > 0:
+                self.item_pointer = len(selectables) - 1
+            if key == 'c':
+                switch_widgets(widget, map_widget)
+            elif key == 'j':
+                self.item_pointer += 1
+            elif key == 'k' and self.item_pointer > 0:
+                self.item_pointer -= 1
+            elif key == action_key and len(selectables) > 0:
+                id_ = selectables[self.item_pointer]
+                self.socket.send('TASK:%s %s' % (task, id_))
+                if bonus_command:
+                    self.socket.send(bonus_command)
+                if self.item_pointer > 0:
+                    self.item_pointer -= 1
+            else:
+                return
+            trigger = widget.check_updates[0]
+            self.to_update[trigger] = True
+
+        setup_screen(stdscr)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
         curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
@@ -490,7 +514,7 @@ class TUI:
                 key = self.stdscr.getkey()
                 if key == 'KEY_RESIZE':
                     curses.endwin()
-                    self.setup_screen(curses.initscr())
+                    setup_screen(curses.initscr())
                     for w in top_widgets:
                         w.size = w.size_def
                         w.ensure_freshness(True)
@@ -534,51 +558,18 @@ class TUI:
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
                         self.item_pointer = 0
-                        self.switch_widgets(map_widget, pickable_items_widget)
+                        switch_widgets(map_widget, pickable_items_widget)
                     elif key == 'i':
                         self.item_pointer = 0
-                        self.switch_widgets(map_widget, inventory_widget)
+                        switch_widgets(map_widget, inventory_widget)
                 elif pickable_items_widget.visible:
-                    if len(self.game.world.pickable_items) < self.item_pointer + 1\
-                       and self.item_pointer > 0:
-                        self.item_pointer = len(self.game.world.pickable_items) - 1
-                    while len(self.game.world.pickable_items) <= self.item_pointer:
-                        self.item_pointer -= 1
-                    if key == 'c':
-                        self.switch_widgets(pickable_items_widget, map_widget)
-                    elif key == 'j':
-                        self.item_pointer += 1
-                    elif key == 'k' and self.item_pointer > 0:
-                        self.item_pointer -= 1
-                    elif key == 'p' and \
-                         len(self.game.world.pickable_items) > 0:
-                        id_ = self.game.world.pickable_items[self.item_pointer]
-                        self.socket.send('TASK:PICKUP %s' % id_)
-                        self.socket.send('GET_PICKABLE_ITEMS')
-                        if self.item_pointer > 0:
-                            self.item_pointer -= 1
-                    else:
-                        continue
-                    self.to_update['pickable_items'] = True
+                    pick_or_drop_menu('p', pickable_items_widget,
+                                      self.game.world.pickable_items,
+                                      'PICKUP', 'GET_PICKABLE_ITEMS')
                 elif inventory_widget.visible:
-                    if len(self.game.world.player_inventory) < self.item_pointer + 1\
-                       and self.item_pointer > 0:
-                        self.item_pointer = len(self.game.world.player_inventory) - 1
-                    if key == 'c':
-                        self.switch_widgets(inventory_widget, map_widget)
-                    elif key == 'j':
-                        self.item_pointer += 1
-                    elif key == 'k' and self.item_pointer > 0:
-                        self.item_pointer -= 1
-                    elif key == 'd' and \
-                         len(self.game.world.player_inventory) > 0:
-                        id_ = self.game.world.player_inventory[self.item_pointer]
-                        self.socket.send('TASK:DROP %s' % id_)
-                        if self.item_pointer > 0:
-                            self.item_pointer -= 1
-                    else:
-                        continue
-                    self.to_update['inventory'] = True
+                    pick_or_drop_menu('d', inventory_widget,
+                                      self.game.world.player_inventory,
+                                      'DROP')
             except curses.error:
                 pass
             if self.game.do_quit:
