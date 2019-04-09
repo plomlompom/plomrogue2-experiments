@@ -322,7 +322,6 @@ class PopUpWidget(Widget):
         self.safe_write(self.tui.popup_text)
 
     def reconfigure(self):
-        self.visible = True
         size = (1, len(self.tui.popup_text))
         self.size = size
         self.size_def = size
@@ -367,10 +366,6 @@ class PickableItemsWidget(ItemsSelectorWidget):
 
 class MapWidget(Widget):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.examine_mode = False
-
     def draw(self):
 
         def annotated_terrain():
@@ -385,7 +380,7 @@ class MapWidget(Widget):
                     terrain_as_list[pos_i] = (symbol, '+')
                 else:
                     terrain_as_list[pos_i] = symbol
-            if self.examine_mode:
+            if self.tui.examiner_mode:
                 pos_i = self.tui.game.world.map_.\
                         get_position_index(self.tui.examiner_position)
                 terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
@@ -429,7 +424,7 @@ class MapWidget(Widget):
 
         annotated_terrain = annotated_terrain()
         center = self.tui.game.world.player.position
-        if self.examine_mode:
+        if self.tui.examiner_mode:
             center = self.tui.examiner_position
         lines = self.tui.game.world.map_.format_to_view(annotated_terrain,
                                                         center, self.size)
@@ -465,6 +460,10 @@ class TUI:
         self.to_update = {}
         self.item_pointer = 0
         self.examiner_position = (0, 0)
+        self.examiner_mode = False
+        self.popup_text = 'Hi bob'
+        self.to_send = []
+        self.draw_popup_if_visible = True
         curses.wrapper(self.loop)
 
     def loop(self, stdscr):
@@ -487,7 +486,6 @@ class TUI:
                 self.item_pointer = len(selectables) - 1
             if key == 'c':
                 switch_widgets(widget, map_widget)
-                map_widget.examine_mode = False
             elif key == 'j':
                 self.item_pointer += 1
             elif key == 'k' and self.item_pointer > 0:
@@ -512,13 +510,84 @@ class TUI:
             self.to_update['map'] = True
             self.to_update['descriptor'] = True
 
+        def switch_to_pick_or_drop(target_widget):
+            self.item_pointer = 0
+            switch_widgets(map_widget, target_widget)
+            if self.examiner_mode:
+                self.examiner_mode = False
+                switch_widgets(descriptor_widget, log_widget)
+
+        def toggle_examiner_mode():
+            if self.examiner_mode:
+                self.examiner_mode = False
+                switch_widgets(descriptor_widget, log_widget)
+            else:
+                self.examiner_mode = True
+                self.examiner_position = self.game.world.player.position
+                switch_widgets(log_widget, descriptor_widget)
+            self.to_update['map'] = True
+
+        def toggle_popup():
+            if popup_widget.visible:
+                popup_widget.visible = False
+                for w in top_widgets:
+                    w.ensure_freshness(True)
+            else:
+                self.to_update['popup'] = True
+                popup_widget.visible = True
+                popup_widget.reconfigure()
+                self.draw_popup_if_visible = True
+
+        def try_write_keys():
+            if len(key) == 1 and key in ASCII_printable and \
+                    len(self.to_send) < len(edit_line_widget):
+                self.to_send += [key]
+                self.to_update['edit'] = True
+            elif key == 'KEY_BACKSPACE':
+                self.to_send[:] = self.to_send[:-1]
+                self.to_update['edit'] = True
+            elif key == '\n':  # Return key
+                self.socket.send(''.join(self.to_send))
+                self.to_send[:] = []
+                self.to_update['edit'] = True
+
+        def try_examiner_keys():
+            if key == 'w':
+                move_examiner('UPLEFT')
+            elif key == 'e':
+                move_examiner('UPRIGHT')
+            elif key == 's':
+                move_examiner('LEFT')
+            elif key == 'd':
+                move_examiner('RIGHT')
+            elif key == 'x':
+                move_examiner('DOWNLEFT')
+            elif key == 'c':
+                move_examiner('DOWNRIGHT')
+
+        def try_player_move_keys():
+            if key == 'w':
+                self.socket.send('TASK:MOVE UPLEFT')
+            elif key == 'e':
+                self.socket.send('TASK:MOVE UPRIGHT')
+            elif key == 's':
+                self.socket.send('TASK:MOVE LEFT')
+            elif key == 'd':
+                self.socket.send('TASK:MOVE RIGHT')
+            elif key == 'x':
+                self.socket.send('TASK:MOVE DOWNLEFT')
+            elif key == 'c':
+                self.socket.send('TASK:MOVE DOWNRIGHT')
+
+        def init_colors():
+            curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
+            curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
+            curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
+            curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+
         setup_screen(stdscr)
-        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
-        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
-        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
-        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
         curses.curs_set(False)  # hide cursor
-        self.to_send = []
+        init_colors()
         edit_widget = TextLineWidget('SEND:', self, (0, 0), (1, 20))
         edit_line_widget = EditWidget(self, (0, 6), (1, 14), ['edit'])
         edit_widget.children += [edit_line_widget]
@@ -536,26 +605,30 @@ class TUI:
                        descriptor_widget, map_widget, inventory_widget,
                        pickable_items_widget]
         popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
-        self.popup_text = 'Hi bob'
-        write_mode = True
+        write_mode = False
         for w in top_widgets:
             w.ensure_freshness(True)
-        draw_popup_if_visible = True
         while True:
+
+            # Draw screen.
             for w in top_widgets:
-                did_refresh = w.ensure_freshness()
-                draw_popup_if_visible = did_refresh | draw_popup_if_visible
-            if popup_widget.visible and draw_popup_if_visible:
+                if w.ensure_freshness():
+                    self.draw_popup_if_visible = True
+            if popup_widget.visible and self.draw_popup_if_visible:
                 popup_widget.ensure_freshness(True)
-                draw_popup_if_visible = False
+                self.draw_popup_if_visible = False
             for k in self.to_update.keys():
                 self.to_update[k] = False
+
+            # Handle input from server.
             while True:
                 try:
                     command = self.queue.get(block=False)
                 except queue.Empty:
                     break
                 self.game.handle_input(command)
+
+            # Handle keys (and resize event read as key).
             try:
                 key = self.stdscr.getkey()
                 if key == 'KEY_RESIZE':
@@ -567,69 +640,21 @@ class TUI:
                 elif key == '\t':  # Tabulator key.
                     write_mode = False if write_mode else True
                 elif write_mode:
-                    if len(key) == 1 and key in ASCII_printable and \
-                            len(self.to_send) < len(edit_line_widget):
-                        self.to_send += [key]
-                        self.to_update['edit'] = True
-                    elif key == 'KEY_BACKSPACE':
-                        self.to_send[:] = self.to_send[:-1]
-                        self.to_update['edit'] = True
-                    elif key == '\n':  # Return key
-                        self.socket.send(''.join(self.to_send))
-                        self.to_send[:] = []
-                        self.to_update['edit'] = True
+                    try_write_keys()
                 elif key == 't':
-                    if not popup_widget.visible:
-                        self.to_update['popup'] = True
-                        popup_widget.visible = True
-                        popup_widget.reconfigure()
-                        draw_popup_if_visible = True
-                    else:
-                        popup_widget.visible = False
-                        for w in top_widgets:
-                            w.ensure_freshness(True)
+                    toggle_popup()
                 elif map_widget.visible:
                     if key == '?':
-                        map_widget.examine_mode = not map_widget.examine_mode
-                        if map_widget.examine_mode:
-                            self.examiner_position = self.game.world.\
-                                                     player.position
-                            switch_widgets(log_widget, descriptor_widget)
-                        else:
-                            switch_widgets(descriptor_widget, log_widget)
-                        self.to_update['map'] = True
+                        toggle_examiner_mode()
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
-                        self.item_pointer = 0
-                        switch_widgets(map_widget, pickable_items_widget)
+                        switch_to_pick_or_drop(pickable_items_widget)
                     elif key == 'i':
-                        self.item_pointer = 0
-                        switch_widgets(map_widget, inventory_widget)
-                    elif map_widget.examine_mode:
-                        if key == 'w':
-                            move_examiner('UPLEFT')
-                        elif key == 'e':
-                            move_examiner('UPRIGHT')
-                        elif key == 's':
-                            move_examiner('LEFT')
-                        elif key == 'd':
-                            move_examiner('RIGHT')
-                        elif key == 'x':
-                            move_examiner('DOWNLEFT')
-                        elif key == 'c':
-                            move_examiner('DOWNRIGHT')
-                    elif key == 'w':
-                        self.socket.send('TASK:MOVE UPLEFT')
-                    elif key == 'e':
-                        self.socket.send('TASK:MOVE UPRIGHT')
-                    elif key == 's':
-                        self.socket.send('TASK:MOVE LEFT')
-                    elif key == 'd':
-                        self.socket.send('TASK:MOVE RIGHT')
-                    elif key == 'x':
-                        self.socket.send('TASK:MOVE DOWNLEFT')
-                    elif key == 'c':
-                        self.socket.send('TASK:MOVE DOWNRIGHT')
+                        switch_to_pick_or_drop(inventory_widget)
+                    elif self.examiner_mode:
+                        try_examiner_keys()
+                    else:
+                        try_player_move_keys()
                 elif pickable_items_widget.visible:
                     pick_or_drop_menu('p', pickable_items_widget,
                                       self.game.world.pickable_items,
@@ -640,6 +665,8 @@ class TUI:
                                       'DROP')
             except curses.error:
                 pass
+
+            # Quit when server recommends it.
             if self.game.do_quit:
                 break
 
