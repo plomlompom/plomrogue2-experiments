@@ -33,14 +33,17 @@ class Map(MapBase):
                 cut_end = cut_start + view_width
             map_lines[:] = [line[cut_start:cut_end] for line in map_lines]
 
-    def format_to_view(self, map_string, center, size):
+    def format_to_view(self, map_cells, center, size):
 
-        def map_string_to_lines(map_string):
+        def map_cells_to_lines(map_cells):
             map_view_chars = ['0']
             x = 0
             y = 0
-            for c in map_string:
-                map_view_chars += [c, ' ']
+            for cell in map_cells:
+                if type(cell) == str:
+                    map_view_chars += [cell, ' ']
+                else:
+                    map_view_chars += [cell[0], cell[1]]
                 x += 1
                 if x == self.size[1]:
                     map_view_chars += ['\n']
@@ -53,7 +56,7 @@ class Map(MapBase):
             map_view_chars = map_view_chars[:-1]
             return ''.join(map_view_chars).split('\n')
 
-        map_lines = map_string_to_lines(map_string)
+        map_lines = map_cells_to_lines(map_cells)
         self.y_cut(map_lines, center[0], size[0])
         map_width = self.size[1] * 2 + 1
         self.x_cut(map_lines, center[1] * 2, size[1], map_width)
@@ -233,14 +236,10 @@ class Widget:
             if not type(part) == str:
                 part_string = part[0]
                 attr = part[1]
-            if len(part_string) > 0:
-                return [(char, attr) for char in part_string]
-            elif len(part_string) == 1:
-                return [part]
-            return []
+            return [(char, attr) for char in part_string]
 
         chars_with_attrs = []
-        if type(foo) == str or len(foo) == 2 and type(foo[1]) == int:
+        if type(foo) == str or (len(foo) == 2 and type(foo[1]) == int):
             chars_with_attrs += to_chars_with_attrs(foo)
         else:
             for part in foo:
@@ -350,15 +349,19 @@ class MapWidget(Widget):
 
     def draw(self):
 
-        def terrain_with_objects():
+        def annotated_terrain():
             terrain_as_list = list(self.tui.game.world.map_.terrain[:])
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
                 symbol = self.tui.game.symbol_for_type(t.type_)
-                if symbol in {'i'} and terrain_as_list[pos_i] in {'@', 'm'}:
-                    continue
-                terrain_as_list[pos_i] = symbol
-            return ''.join(terrain_as_list)
+                if terrain_as_list[pos_i][0] in {'i', '@', 'm'}:
+                    old_symbol = terrain_as_list[pos_i][0]
+                    if old_symbol in {'@', 'm'}:
+                        symbol = old_symbol
+                    terrain_as_list[pos_i] = (symbol, '+')
+                else:
+                    terrain_as_list[pos_i] = symbol
+            return terrain_as_list
 
         def pad_or_cut_x(lines):
             line_width = self.size[1]
@@ -396,9 +399,9 @@ class MapWidget(Widget):
             self.safe_write(''.join(lines))
             return
 
-        terrain_with_objects = terrain_with_objects()
+        annotated_terrain = annotated_terrain()
         center = self.tui.game.world.player.position
-        lines = self.tui.game.world.map_.format_to_view(terrain_with_objects,
+        lines = self.tui.game.world.map_.format_to_view(annotated_terrain,
                                                         center, self.size)
         pad_or_cut_x(lines)
         pad_y(lines)
