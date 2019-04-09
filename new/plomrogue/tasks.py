@@ -37,6 +37,8 @@ class Task_MOVE(Task):
 
     def check(self):
         test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
+        if test_pos is None:
+            raise GameError('would move outside map bounds')
         if self.thing.world.map_[test_pos] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
         for t in self.thing.world.things:

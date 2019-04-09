@@ -5,14 +5,14 @@ import threading
 from plomrogue.parser import ArgError, Parser
 from plomrogue.commands import cmd_MAP, cmd_THING_POS, cmd_PLAYER_ID
 from plomrogue.game import Game, WorldBase
-from plomrogue.mapping import MapBase
+from plomrogue.mapping import MapHex
 from plomrogue.io import PlomSocket
 from plomrogue.things import ThingBase
 import types
 import queue
 
 
-class Map(MapBase):
+class ClientMap(MapHex):
 
     def y_cut(self, map_lines, center_y, view_height):
         map_height = len(map_lines)
@@ -72,13 +72,13 @@ class World(WorldBase):
         on any update, even before we actually receive map data.
         """
         super().__init__(*args, **kwargs)
-        self.map_ = Map()
+        self.map_ = ClientMap()
         self.player_inventory = []
         self.player_id = 0
         self.pickable_items = []
 
     def new_map(self, yx):
-        self.map_ = Map(yx)
+        self.map_ = ClientMap(yx)
 
     @property
     def player(self):
@@ -347,6 +347,11 @@ class PickableItemsWidget(ItemsSelectorWidget):
 
 class MapWidget(Widget):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.examine_mode = False
+        self.examine_pos = (0, 0)
+
     def draw(self):
 
         def annotated_terrain():
@@ -361,6 +366,10 @@ class MapWidget(Widget):
                     terrain_as_list[pos_i] = (symbol, '+')
                 else:
                     terrain_as_list[pos_i] = symbol
+            if self.examine_mode:
+                pos_i = self.tui.game.world.map_.\
+                        get_position_index(self.examine_pos)
+                terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
             return terrain_as_list
 
         def pad_or_cut_x(lines):
@@ -401,6 +410,8 @@ class MapWidget(Widget):
 
         annotated_terrain = annotated_terrain()
         center = self.tui.game.world.player.position
+        if self.examine_mode:
+            center = self.examine_pos
         lines = self.tui.game.world.map_.format_to_view(annotated_terrain,
                                                         center, self.size)
         pad_or_cut_x(lines)
@@ -456,6 +467,7 @@ class TUI:
                 self.item_pointer = len(selectables) - 1
             if key == 'c':
                 switch_widgets(widget, map_widget)
+                map_widget.examine_mode = False
             elif key == 'j':
                 self.item_pointer += 1
             elif key == 'k' and self.item_pointer > 0:
@@ -471,6 +483,13 @@ class TUI:
                 return
             trigger = widget.check_updates[0]
             self.to_update[trigger] = True
+
+        def move_examiner(direction):
+            start_pos = map_widget.examine_pos
+            new_examine_pos = self.game.world.map_.move(start_pos, direction)
+            if new_examine_pos:
+                map_widget.examine_pos = new_examine_pos
+            self.to_update['map'] = True
 
         setup_screen(stdscr)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
@@ -546,18 +565,10 @@ class TUI:
                         for w in top_widgets:
                             w.ensure_freshness(True)
                 elif map_widget.visible:
-                    if key == 'w':
-                        self.socket.send('TASK:MOVE UPLEFT')
-                    elif key == 'e':
-                        self.socket.send('TASK:MOVE UPRIGHT')
-                    if key == 's':
-                        self.socket.send('TASK:MOVE LEFT')
-                    elif key == 'd':
-                        self.socket.send('TASK:MOVE RIGHT')
-                    if key == 'x':
-                        self.socket.send('TASK:MOVE DOWNLEFT')
-                    elif key == 'c':
-                        self.socket.send('TASK:MOVE DOWNRIGHT')
+                    if key == '?':
+                        map_widget.examine_mode = not map_widget.examine_mode
+                        map_widget.examine_pos = self.game.world.player.position
+                        self.to_update['map'] = True
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
                         self.item_pointer = 0
@@ -565,6 +576,31 @@ class TUI:
                     elif key == 'i':
                         self.item_pointer = 0
                         switch_widgets(map_widget, inventory_widget)
+                    elif map_widget.examine_mode:
+                        if key == 'w':
+                            move_examiner('UPLEFT')
+                        elif key == 'e':
+                            move_examiner('UPRIGHT')
+                        elif key == 's':
+                            move_examiner('LEFT')
+                        elif key == 'd':
+                            move_examiner('RIGHT')
+                        elif key == 'x':
+                            move_examiner('DOWNLEFT')
+                        elif key == 'c':
+                            move_examiner('DOWNRIGHT')
+                    elif key == 'w':
+                        self.socket.send('TASK:MOVE UPLEFT')
+                    elif key == 'e':
+                        self.socket.send('TASK:MOVE UPRIGHT')
+                    elif key == 's':
+                        self.socket.send('TASK:MOVE LEFT')
+                    elif key == 'd':
+                        self.socket.send('TASK:MOVE RIGHT')
+                    elif key == 'x':
+                        self.socket.send('TASK:MOVE DOWNLEFT')
+                    elif key == 'c':
+                        self.socket.send('TASK:MOVE DOWNRIGHT')
                 elif pickable_items_widget.visible:
                     pick_or_drop_menu('p', pickable_items_widget,
                                       self.game.world.pickable_items,

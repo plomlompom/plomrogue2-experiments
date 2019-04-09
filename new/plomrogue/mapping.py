@@ -2,11 +2,27 @@ from plomrogue.errors import ArgError
 
 
 
-class MapBase:
+class Map:
 
     def __init__(self, size=(0, 0)):
         self.size = size
         self.terrain = '?'*self.size_i
+
+    def __getitem__(self, yx):
+        return self.terrain[self.get_position_index(yx)]
+
+    def __setitem__(self, yx, c):
+        pos_i = self.get_position_index(yx)
+        if type(c) == str:
+            self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
+        else:
+            self.terrain[pos_i] = c
+
+    def __iter__(self):
+        """Iterate over YX position coordinates."""
+        for y in range(self.size[0]):
+            for x in range(self.size[1]):
+                yield (y, x)
 
     @property
     def size_i(self):
@@ -25,25 +41,6 @@ class MapBase:
 
     def get_position_index(self, yx):
         return yx[0] * self.size[1] + yx[1]
-
-
-class Map(MapBase):
-
-    def __getitem__(self, yx):
-        return self.terrain[self.get_position_index(yx)]
-
-    def __setitem__(self, yx, c):
-        pos_i = self.get_position_index(yx)
-        if type(c) == str:
-            self.terrain = self.terrain[:pos_i] + c + self.terrain[pos_i + 1:]
-        else:
-            self.terrain[pos_i] = c
-
-    def __iter__(self):
-        """Iterate over YX position coordinates."""
-        for y in range(self.size[0]):
-            for x in range(self.size[1]):
-                yield (y, x)
 
     def lines(self):
         width = self.size[1]
@@ -69,10 +66,9 @@ class Map(MapBase):
             return self.neighbors_to[pos]
         for direction in self.get_directions():
             neighbors[direction] = None
-            try:
-                neighbors[direction] = self.move(pos, direction)
-            except GameError:
-                pass
+            neighbor_pos = self.move(pos, direction)
+            if neighbor_pos:
+                neighbors[direction] = neighbor_pos
         self.neighbors_to[pos] = neighbors
         return neighbors
 
@@ -88,7 +84,7 @@ class Map(MapBase):
         new_pos = mover(start_pos)
         if new_pos[0] < 0 or new_pos[1] < 0 or \
                 new_pos[0] >= self.size[0] or new_pos[1] >= self.size[1]:
-            raise GameError('would move outside map bounds')
+            return None
         return new_pos
 
 
