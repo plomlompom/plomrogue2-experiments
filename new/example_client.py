@@ -282,18 +282,38 @@ class EditWidget(Widget):
         self.safe_write((''.join(self.tui.to_send), curses.color_pair(1)))
 
 
-class LogWidget(Widget):
+class TextLinesWidget(Widget):
 
     def draw(self):
+        lines = self.get_text_lines()
         line_width = self.size[1]
-        log_lines = self.tui.game.log_text.split('\n')
         to_join = []
-        for line in log_lines:
+        for line in lines:
             to_pad = line_width - (len(line) % line_width)
             if to_pad == line_width:
                 to_pad = 0
             to_join += [line + ' '*to_pad]
         self.safe_write((''.join(to_join), curses.color_pair(3)))
+
+
+class LogWidget(TextLinesWidget):
+
+    def get_text_lines(self):
+        return self.tui.game.log_text.split('\n')
+
+
+class DescriptorWidget(TextLinesWidget):
+
+    def get_text_lines(self):
+        lines = []
+        pos_i = self.tui.game.world.map_.\
+                get_position_index(self.tui.examiner_position)
+        terrain = self.tui.game.world.map_.terrain[pos_i]
+        lines = [terrain]
+        for t in self.tui.game.world.things:
+            if t.position == self.tui.examiner_position:
+                lines += [t.type_]
+        return lines
 
 
 class PopUpWidget(Widget):
@@ -350,7 +370,6 @@ class MapWidget(Widget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.examine_mode = False
-        self.examine_pos = (0, 0)
 
     def draw(self):
 
@@ -368,7 +387,7 @@ class MapWidget(Widget):
                     terrain_as_list[pos_i] = symbol
             if self.examine_mode:
                 pos_i = self.tui.game.world.map_.\
-                        get_position_index(self.examine_pos)
+                        get_position_index(self.tui.examiner_position)
                 terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
             return terrain_as_list
 
@@ -411,7 +430,7 @@ class MapWidget(Widget):
         annotated_terrain = annotated_terrain()
         center = self.tui.game.world.player.position
         if self.examine_mode:
-            center = self.examine_pos
+            center = self.tui.examiner_position
         lines = self.tui.game.world.map_.format_to_view(annotated_terrain,
                                                         center, self.size)
         pad_or_cut_x(lines)
@@ -445,6 +464,7 @@ class TUI:
         self.parser = Parser(self.game)
         self.to_update = {}
         self.item_pointer = 0
+        self.examiner_position = (0, 0)
         curses.wrapper(self.loop)
 
     def loop(self, stdscr):
@@ -485,11 +505,12 @@ class TUI:
             self.to_update[trigger] = True
 
         def move_examiner(direction):
-            start_pos = map_widget.examine_pos
+            start_pos = self.examiner_position
             new_examine_pos = self.game.world.map_.move(start_pos, direction)
             if new_examine_pos:
-                map_widget.examine_pos = new_examine_pos
+                self.examiner_position = new_examine_pos
             self.to_update['map'] = True
+            self.to_update['descriptor'] = True
 
         setup_screen(stdscr)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)
@@ -504,13 +525,16 @@ class TUI:
         turn_widget = TextLineWidget('TURN:', self, (2, 0), (1, 20))
         turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
         log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
+        descriptor_widget = DescriptorWidget(self, (4, 0), (None, 20),
+                                             ['descriptor'], False)
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
         inventory_widget = InventoryWidget(self, (0, 21), (None, None),
                                            ['inventory'], False)
         pickable_items_widget = PickableItemsWidget(self, (0, 21), (None, None),
                                                     ['pickable_items'], False)
-        top_widgets = [edit_widget, turn_widget, log_widget, map_widget,
-                       inventory_widget, pickable_items_widget]
+        top_widgets = [edit_widget, turn_widget, log_widget,
+                       descriptor_widget, map_widget, inventory_widget,
+                       pickable_items_widget]
         popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
         self.popup_text = 'Hi bob'
         write_mode = True
@@ -567,7 +591,12 @@ class TUI:
                 elif map_widget.visible:
                     if key == '?':
                         map_widget.examine_mode = not map_widget.examine_mode
-                        map_widget.examine_pos = self.game.world.player.position
+                        if map_widget.examine_mode:
+                            self.examiner_position = self.game.world.\
+                                                     player.position
+                            switch_widgets(log_widget, descriptor_widget)
+                        else:
+                            switch_widgets(descriptor_widget, log_widget)
                         self.to_update['map'] = True
                     elif key == 'p':
                         self.socket.send('GET_PICKABLE_ITEMS')
