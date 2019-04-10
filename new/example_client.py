@@ -412,6 +412,8 @@ class MapWidget(Widget):
                     chars_with_attrs += [(c, curses.color_pair(2))]
                 elif c in {'x', 'X', '#'}:
                     chars_with_attrs += [(c, curses.color_pair(3))]
+                elif c == '?':
+                    chars_with_attrs += [(c, curses.color_pair(5))]
                 else:
                     chars_with_attrs += [c]
             return chars_with_attrs
@@ -584,6 +586,7 @@ class TUI:
             curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
             curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
             curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+            curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_WHITE)
 
         # Basic curses initialization work.
         setup_screen(stdscr)
