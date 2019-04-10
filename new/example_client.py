@@ -608,6 +608,7 @@ class TUI:
         write_mode = False
         for w in top_widgets:
             w.ensure_freshness(True)
+        self.socket.send('GET_GAMESTATE')
         while True:
 
             # Draw screen.
