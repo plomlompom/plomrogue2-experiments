@@ -1,10 +1,12 @@
 from plomrogue.tasks import Task_WAIT, Task_MOVE, Task_PICKUP, Task_DROP
-from plomrogue.errors import ArgError
-from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE, cmd_MAP,
-                                cmd_MAP, cmd_THING_TYPE, cmd_THING_POS,
-                                cmd_THING_INVENTORY, cmd_GET_PICKABLE_ITEMS,
-                                cmd_TERRAIN_LINE, cmd_PLAYER_ID, cmd_TURN,
-                                cmd_SWITCH_PLAYER, cmd_SAVE)
+from plomrogue.errors import ArgError, GameError
+from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
+                                cmd_MAP, cmd_MAP, cmd_THING_TYPE,
+                                cmd_THING_POS, cmd_THING_INVENTORY,
+                                cmd_THING_HEALTH,
+                                cmd_GET_PICKABLE_ITEMS,
+                                cmd_TERRAIN_LINE, cmd_PLAYER_ID,
+                                cmd_TURN, cmd_SWITCH_PLAYER, cmd_SAVE)
 from plomrogue.mapping import MapHex
 from plomrogue.parser import Parser
 from plomrogue.io import GameIO
@@ -37,6 +39,7 @@ class World(WorldBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.player_id = 0
+        self.player_is_alive = True
 
     @property
     def player(self):
@@ -60,7 +63,9 @@ class World(WorldBase):
         (after incrementing the world turn) all that come before the
         player; then the player's .proceed() is run, and if it does
         not finish his task, the loop starts at the beginning. Once
-        the player's task is finished, the loop breaks.
+        the player's task is finished, or the player is dead, the loop
+        breaks.
+
         """
         while True:
             player_i = self.things.index(self.player)
@@ -70,7 +75,7 @@ class World(WorldBase):
             for thing in self.things[:player_i]:
                 thing.proceed()
             self.player.proceed(is_AI=False)
-            if self.player.task is None:
+            if self.player.task is None or not self.player_is_alive:
                 break
 
     def make_new(self, yx, seed):
@@ -117,6 +122,7 @@ class Game:
                          'MAP': cmd_MAP,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS,
+                         'THING_HEALTH': cmd_THING_HEALTH,
                          'THING_INVENTORY': cmd_THING_INVENTORY,
                          'TERRAIN_LINE': cmd_TERRAIN_LINE,
                          'GET_PICKABLE_ITEMS': cmd_GET_PICKABLE_ITEMS,
@@ -151,6 +157,9 @@ class Game:
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_,
                                               stringify_yx(thing.position)))
+            if hasattr(thing, 'health'):
+                self.io.send('THING_HEALTH %s %s' % (thing.id_,
+                                                     thing.health))
         if len(self.world.player.inventory) > 0:
             self.io.send('PLAYER_INVENTORY %s' %
                          ','.join([str(i) for i in self.world.player.inventory]))
@@ -184,6 +193,8 @@ class Game:
             return p
 
         def cmd_TASK_colon(task_name, game, *args):
+            if not game.world.player_is_alive:
+                raise GameError('You are dead.')
             game.world.player.set_task(task_name, args)
             game.proceed()
 

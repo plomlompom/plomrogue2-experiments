@@ -94,18 +94,27 @@ class ThingAnimate(Thing):
         self.task.check()  # will throw GameError if necessary
 
     def proceed(self, is_AI=True):
-        """Further the thing in its tasks.
+        """Further the thing in its tasks, decrease its health.
 
-        Decrements .task.todo; if it thus falls to <= 0, enacts method
-        whose name is 'task_' + self.task.name and sets .task =
-        None. If is_AI, calls .decide_task to decide a self.task.
-
-        Before doing anything, ensures an empty map visibility stencil
-        and checks that task is still possible, and aborts it
+        First, ensures an empty map, decrements .health and kills
+        thing if crossing zero (removes from self.world.things for AI
+        thing, or unsets self.world.player_is_alive for player thing);
+        then checks that self.task is still possible and aborts if
         otherwise (for AI things, decides a new task).
+
+        Then decrements .task.todo; if it thus falls to <= 0, enacts
+        method whose name is 'task_' + self.task.name and sets .task =
+        None. If is_AI, calls .decide_task to decide a self.task.
 
         """
         self._stencil = None
+        self.health -= 1
+        if self.health <= 0:
+            if self is self.world.player:
+                self.world.player_is_alive = False
+            else:
+                del self.world.things[self.world.things.index(self)]
+            return
         try:
             self.task.check()
         except GameError as e:
@@ -163,8 +172,10 @@ class ThingAnimate(Thing):
 
 class ThingHuman(ThingAnimate):
     type_ = 'human'
+    health = 100
 
 
 
 class ThingMonster(ThingAnimate):
     type_ = 'monster'
+    health = 50

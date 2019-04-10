@@ -46,6 +46,11 @@ def cmd_THING_INVENTORY(game, id_, ids):
     t.inventory = ids  # TODO: test whether valid IDs
 cmd_THING_INVENTORY.argtypes = 'int:nonneg seq:int:nonneg'
 
+def cmd_THING_HEALTH(game, id_, health):
+    t = game.world.get_thing(id_)
+    t.health = health
+cmd_THING_HEALTH.argtypes = 'int:nonneg int:nonneg'
+
 def cmd_GET_PICKABLE_ITEMS(game, connection_id):
     pickable_ids = game.world.player.get_pickable_items()
     if len(pickable_ids) > 0:
@@ -92,6 +97,8 @@ def cmd_SAVE(game):
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
             write(f, 'THING_POS %s %s' % (thing.id_,
                                           stringify_yx(thing.position)))
+            if hasattr(thing, 'health'):
+                write(f, 'THING_HEALTH %s %s' % (thing.id_, thing.health))
             if len(thing.inventory) > 0:
                 write(f, 'THING_INVENTORY %s %s' %
                       (thing.id_,','.join([str(i) for i in thing.inventory])))

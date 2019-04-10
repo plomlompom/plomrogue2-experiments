@@ -3,7 +3,8 @@ import curses
 import socket
 import threading
 from plomrogue.parser import ArgError, Parser
-from plomrogue.commands import cmd_MAP, cmd_THING_POS, cmd_PLAYER_ID
+from plomrogue.commands import (cmd_MAP, cmd_THING_POS, cmd_PLAYER_ID,
+                                cmd_THING_HEALTH)
 from plomrogue.game import Game, WorldBase
 from plomrogue.mapping import MapHex
 from plomrogue.io import PlomSocket
@@ -149,6 +150,7 @@ class Game:
                          'MAP': cmd_MAP,
                          'PICKABLE_ITEMS': cmd_PICKABLE_ITEMS,
                          'THING_TYPE': cmd_THING_TYPE,
+                         'THING_HEALTH': cmd_THING_HEALTH,
                          'THING_POS': cmd_THING_POS}
         self.log_text = ''
         self.do_quit = False
@@ -448,6 +450,14 @@ class TurnWidget(Widget):
         self.safe_write((str(self.tui.game.world.turn), curses.color_pair(2)))
 
 
+class HealthWidget(Widget):
+
+    def draw(self):
+        if hasattr(self.tui.game.world.player, 'health'):
+            self.safe_write((str(self.tui.game.world.player.health),
+                             curses.color_pair(2)))
+
+
 class TextLineWidget(Widget):
 
     def __init__(self, text_line, *args, **kwargs):
@@ -605,15 +615,17 @@ class TUI:
         edit_widget.children += [edit_line_widget]
         turn_widget = TextLineWidget('TURN:', self, (2, 0), (1, 20))
         turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
-        log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
-        descriptor_widget = DescriptorWidget(self, (4, 0), (None, 20),
+        health_widget = TextLineWidget('HEALTH:', self, (3, 0), (1, 20))
+        health_widget.children += [HealthWidget(self, (3, 8), (1, 12), ['turn'])]
+        log_widget = LogWidget(self, (5, 0), (None, 20), ['log'])
+        descriptor_widget = DescriptorWidget(self, (5, 0), (None, 20),
                                              ['map'], False)
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
         inventory_widget = InventoryWidget(self, (0, 21), (None, None),
                                            ['inventory'], False)
         pickable_items_widget = PickableItemsWidget(self, (0, 21), (None, None),
                                                     ['pickable_items'], False)
-        top_widgets = [edit_widget, turn_widget, log_widget,
+        top_widgets = [edit_widget, turn_widget, health_widget, log_widget,
                        descriptor_widget, map_widget, inventory_widget,
                        pickable_items_widget]
         popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
