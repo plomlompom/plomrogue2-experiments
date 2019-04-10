@@ -585,9 +585,12 @@ class TUI:
             curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_BLUE)
             curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_YELLOW)
 
+        # Basic curses initialization work.
         setup_screen(stdscr)
         curses.curs_set(False)  # hide cursor
         init_colors()
+
+        # With screen initialized, set up widgets with their curses windows.
         edit_widget = TextLineWidget('SEND:', self, (0, 0), (1, 20))
         edit_line_widget = EditWidget(self, (0, 6), (1, 14), ['edit'])
         edit_widget.children += [edit_line_widget]
@@ -605,10 +608,12 @@ class TUI:
                        descriptor_widget, map_widget, inventory_widget,
                        pickable_items_widget]
         popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
-        write_mode = False
+
+        # Ensure initial window state before loop starts.
         for w in top_widgets:
             w.ensure_freshness(True)
         self.socket.send('GET_GAMESTATE')
+        write_mode = False
         while True:
 
             # Draw screen.
