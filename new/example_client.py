@@ -90,10 +90,12 @@ def cmd_LAST_PLAYER_TASK_RESULT(game, msg):
         game.log(msg)
 cmd_LAST_PLAYER_TASK_RESULT.argtypes = 'string'
 
+
 def cmd_TURN_FINISHED(game, n):
     """Do nothing. (This may be extended later.)"""
     pass
 cmd_TURN_FINISHED.argtypes = 'int:nonneg'
+
 
 def cmd_TURN(game, n):
     """Set game.turn to n, empty game.things."""
@@ -102,23 +104,28 @@ def cmd_TURN(game, n):
     game.world.pickable_items = []
 cmd_TURN.argtypes = 'int:nonneg'
 
+
 def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
     game.world.map_.set_line(y, terrain_line)
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
+
 
 def cmd_GAME_STATE_COMPLETE(game):
     game.tui.to_update['turn'] = True
     game.tui.to_update['map'] = True
     game.tui.to_update['inventory'] = True
 
+
 def cmd_THING_TYPE(game, i, type_):
     t = game.world.get_thing(i)
     t.type_ = type_
 cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
+
 def cmd_PLAYER_INVENTORY(game, ids):
     game.world.player_inventory = ids  # TODO: test whether valid IDs
 cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
+
 
 def cmd_PICKABLE_ITEMS(game, ids):
     game.world.pickable_items = ids
@@ -510,7 +517,6 @@ class TUI:
             if new_examine_pos:
                 self.examiner_position = new_examine_pos
             self.to_update['map'] = True
-            self.to_update['descriptor'] = True
 
         def switch_to_pick_or_drop(target_widget):
             self.item_pointer = 0
@@ -601,7 +607,7 @@ class TUI:
         turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
         log_widget = LogWidget(self, (4, 0), (None, 20), ['log'])
         descriptor_widget = DescriptorWidget(self, (4, 0), (None, 20),
-                                             ['descriptor'], False)
+                                             ['map'], False)
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
         inventory_widget = InventoryWidget(self, (0, 21), (None, None),
                                            ['inventory'], False)
