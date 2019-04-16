@@ -1,4 +1,5 @@
-from plomrogue.tasks import Task_WAIT, Task_MOVE, Task_PICKUP, Task_DROP
+from plomrogue.tasks import (Task_WAIT, Task_MOVE, Task_PICKUP,
+                             Task_DROP, Task_EAT)
 from plomrogue.errors import ArgError, GameError
 from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
                                 cmd_MAP, cmd_MAP, cmd_THING_TYPE,
@@ -11,7 +12,7 @@ from plomrogue.mapping import MapHex
 from plomrogue.parser import Parser
 from plomrogue.io import GameIO
 from plomrogue.misc import quote, stringify_yx
-from plomrogue.things import Thing, ThingMonster, ThingHuman, ThingItem
+from plomrogue.things import Thing, ThingMonster, ThingHuman, ThingFood
 
 
 
@@ -102,8 +103,10 @@ class World(WorldBase):
         self.player_id = player.id_
         add_thing('monster')
         add_thing('monster')
-        add_thing('item')
-        add_thing('item')
+        add_thing('food')
+        add_thing('food')
+        add_thing('food')
+        add_thing('food')
         return 'success'
 
 
@@ -116,6 +119,7 @@ class Game:
         self.tasks = {'WAIT': Task_WAIT,
                       'MOVE': Task_MOVE,
                       'PICKUP': Task_PICKUP,
+                      'EAT': Task_EAT,
                       'DROP': Task_DROP}
         self.commands = {'GEN_WORLD': cmd_GEN_WORLD,
                          'GET_GAMESTATE': cmd_GET_GAMESTATE,
@@ -135,7 +139,7 @@ class Game:
         self.thing_type = Thing
         self.thing_types = {'human': ThingHuman,
                             'monster': ThingMonster,
-                            'item': ThingItem}
+                            'food': ThingFood}
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':

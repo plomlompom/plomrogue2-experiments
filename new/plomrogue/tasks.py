@@ -73,18 +73,45 @@ class Task_PICKUP(Task):
 
 
 
-class Task_DROP(Task):
+class TaskOnInventoryItem(Task):
+    argtypes = 'int:nonneg'
+
+    def _basic_inventory_item_check(self):
+        item = self.thing.world.get_thing(self.args[0], create_unfound=False)
+        if item is None:
+            raise GameError('no thing of ID %s' % self.args[0])
+        if item.id_ not in self.thing.inventory:
+            raise GameError('no thing of ID %s in inventory' % self.args[0])
+        return item
+
+    def _eliminate_from_inventory(self):
+        item = self.thing.world.get_thing(self.args[0])
+        del self.thing.inventory[self.thing.inventory.index(item.id_)]
+        item.in_inventory = False
+        return item
+
+
+
+class Task_DROP(TaskOnInventoryItem):
     argtypes = 'int:nonneg'
 
     def check(self):
-        to_drop = self.thing.world.get_thing(self.args[0], create_unfound=False)
-        if to_drop is None:
-            raise GameError('no thing of ID %s to drop' % self.args[0])
-        if to_drop.id_ not in self.thing.inventory:
-            raise GameError('no thing of ID %s to drop in inventory'
-                            % self.args[0])
+        self._basic_inventory_item_check()
 
     def do(self):
-        to_drop = self.thing.world.get_thing(self.args[0])
-        del self.thing.inventory[self.thing.inventory.index(to_drop.id_)]
-        to_drop.in_inventory = False
+        self._eliminate_from_inventory()
+
+
+
+class Task_EAT(TaskOnInventoryItem):
+    argtypes = 'int:nonneg'
+
+    def check(self):
+        to_eat = self._basic_inventory_item_check()
+        if to_eat.type_ != 'food':
+            raise GameError('thing of ID %s s not food' % self.args[0])
+
+    def do(self):
+        to_eat = self._eliminate_from_inventory()
+        del self.thing.world.things[self.thing.world.things.index(to_eat)]
+        self.thing.health += 50

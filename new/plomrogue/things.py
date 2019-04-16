@@ -29,7 +29,12 @@ class Thing(ThingBase):
 
 
 class ThingItem(Thing):
-    type_ = 'item'
+    pass
+
+
+
+class ThingFood(ThingItem):
+    type_ = 'food'
 
 
 

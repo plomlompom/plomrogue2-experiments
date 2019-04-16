@@ -102,7 +102,7 @@ def cmd_TURN(game, n):
     """Set game.turn to n, empty game.things."""
     game.world.turn = n
     game.world.things = []
-    game.world.pickable_items = []
+    game.world.pickable_items[:] = []
 cmd_TURN.argtypes = 'int:nonneg'
 
 
@@ -124,12 +124,13 @@ cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
 
 def cmd_PLAYER_INVENTORY(game, ids):
-    game.world.player_inventory = ids  # TODO: test whether valid IDs
+    game.world.player_inventory[:] = ids  # TODO: test whether valid IDs
+    game.tui.to_update['inventory'] = True
 cmd_PLAYER_INVENTORY.argtypes = 'seq:int:nonneg'
 
 
 def cmd_PICKABLE_ITEMS(game, ids):
-    game.world.pickable_items = ids
+    game.world.pickable_items[:] = ids
     game.tui.to_update['pickable_items'] = True
 cmd_PICKABLE_ITEMS.argtypes = 'seq:int:nonneg'
 
@@ -193,8 +194,8 @@ class Game:
             symbol = '@'
         elif type_ == 'monster':
             symbol = 'm'
-        elif type_ == 'item':
-            symbol = 'i'
+        elif type_ == 'food':
+            symbol = 'f'
         return symbol
 
 
@@ -342,10 +343,26 @@ class PopUpWidget(Widget):
 
 class ItemsSelectorWidget(Widget):
 
-    def draw_item_selector(self, title, selection):
-        lines = [title]
+    def __init__(self, headline, selection, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.headline = headline
+        self.selection = selection
+
+    def ensure_freshness(self, *args, **kwargs):
+        # We only update pointer on non-empty selection so that the zero-ing
+        # of the selection at TURN_FINISHED etc. before pulling in a new
+        # state does not destroy any memory of previous item pointer positions.
+        if len(self.selection) > 0 and\
+           len(self.selection) < self.tui.item_pointer + 1 and\
+           self.tui.item_pointer > 0:
+            self.tui.item_pointer = max(0, len(self.selection) - 1)
+            self.tui.to_update[self.check_updates[0]] = True
+        super().ensure_freshness(*args, **kwargs)
+
+    def draw(self):
+        lines = [self.headline]
         counter = 0
-        for id_ in selection:
+        for id_ in self.selection:
             pointer = '*' if counter == self.tui.item_pointer else ' '
             t = self.tui.game.world.get_thing(id_)
             lines += ['%s %s' % (pointer, t.type_)]
@@ -360,19 +377,6 @@ class ItemsSelectorWidget(Widget):
         self.safe_write((''.join(to_join), curses.color_pair(3)))
 
 
-class InventoryWidget(ItemsSelectorWidget):
-
-    def draw(self):
-        self.draw_item_selector('INVENTORY:',
-                                self.tui.game.world.player_inventory)
-
-class PickableItemsWidget(ItemsSelectorWidget):
-
-    def draw(self):
-        self.draw_item_selector('PICKABLE:',
-                                self.tui.game.world.pickable_items)
-
-
 class MapWidget(Widget):
 
     def draw(self):
@@ -382,7 +386,7 @@ class MapWidget(Widget):
             for t in self.tui.game.world.things:
                 pos_i = self.tui.game.world.map_.get_position_index(t.position)
                 symbol = self.tui.game.symbol_for_type(t.type_)
-                if terrain_as_list[pos_i][0] in {'i', '@', 'm'}:
+                if terrain_as_list[pos_i][0] in {'f', '@', 'm'}:
                     old_symbol = terrain_as_list[pos_i][0]
                     if old_symbol in {'@', 'm'}:
                         symbol = old_symbol
@@ -415,7 +419,7 @@ class MapWidget(Widget):
             for c in ''.join(lines):
                 if c in {'@', 'm'}:
                     chars_with_attrs += [(c, curses.color_pair(1))]
-                elif c == 'i':
+                elif c == 'f':
                     chars_with_attrs += [(c, curses.color_pair(4))]
                 elif c == '.':
                     chars_with_attrs += [(c, curses.color_pair(2))]
@@ -498,28 +502,47 @@ class TUI:
             trigger = widget_2.check_updates[0]
             self.to_update[trigger] = True
 
-        def pick_or_drop_menu(action_key, widget, selectables, task,
-                              bonus_command=None):
-            if len(selectables) < self.item_pointer + 1 and\
-               self.item_pointer > 0:
-                self.item_pointer = len(selectables) - 1
+        def selectables_menu(key, widget, selectables, f):
             if key == 'c':
                 switch_widgets(widget, map_widget)
             elif key == 'j':
                 self.item_pointer += 1
             elif key == 'k' and self.item_pointer > 0:
                 self.item_pointer -= 1
-            elif key == action_key and len(selectables) > 0:
-                id_ = selectables[self.item_pointer]
-                self.socket.send('TASK:%s %s' % (task, id_))
-                if bonus_command:
-                    self.socket.send(bonus_command)
-                if self.item_pointer > 0:
-                    self.item_pointer -= 1
-            else:
+            elif not f(key, selectables):
                 return
             trigger = widget.check_updates[0]
             self.to_update[trigger] = True
+
+        def pickup_menu(key):
+
+            def f(key, selectables):
+                if key == 'p' and len(selectables) > 0:
+                    id_ = selectables[self.item_pointer]
+                    self.socket.send('TASK:PICKUP %s' % id_)
+                    self.socket.send('GET_PICKABLE_ITEMS')
+                else:
+                    return False
+                return True
+
+            selectables_menu(key, pickable_items_widget,
+                             self.game.world.pickable_items, f)
+
+        def inventory_menu(key):
+
+            def f(key, selectables):
+                if key == 'd' and len(selectables) > 0:
+                    id_ = selectables[self.item_pointer]
+                    self.socket.send('TASK:DROP %s' % id_)
+                elif key == 'e' and len(selectables) > 0:
+                    id_ = selectables[self.item_pointer]
+                    self.socket.send('TASK:EAT %s' % id_)
+                else:
+                    return False
+                return True
+
+            selectables_menu(key, inventory_widget,
+                             self.game.world.player_inventory, f)
 
         def move_examiner(direction):
             start_pos = self.examiner_position
@@ -621,10 +644,17 @@ class TUI:
         descriptor_widget = DescriptorWidget(self, (5, 0), (None, 20),
                                              ['map'], False)
         map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
-        inventory_widget = InventoryWidget(self, (0, 21), (None, None),
-                                           ['inventory'], False)
-        pickable_items_widget = PickableItemsWidget(self, (0, 21), (None, None),
-                                                    ['pickable_items'], False)
+        inventory_widget = ItemsSelectorWidget('INVENTORY:',
+                                               self.game.world.player_inventory,
+                                               self, (0, 21), (None,
+                                                               None), ['inventory'],
+                                               False)
+        pickable_items_widget = ItemsSelectorWidget('PICKABLE:',
+                                                    self.game.world.pickable_items,
+                                                    self, (0, 21),
+                                                    (None, None),
+                                                    ['pickable_items'],
+                                                    False)
         top_widgets = [edit_widget, turn_widget, health_widget, log_widget,
                        descriptor_widget, map_widget, inventory_widget,
                        pickable_items_widget]
@@ -683,13 +713,9 @@ class TUI:
                     else:
                         try_player_move_keys()
                 elif pickable_items_widget.visible:
-                    pick_or_drop_menu('p', pickable_items_widget,
-                                      self.game.world.pickable_items,
-                                      'PICKUP', 'GET_PICKABLE_ITEMS')
+                    pickup_menu(key)
                 elif inventory_widget.visible:
-                    pick_or_drop_menu('d', inventory_widget,
-                                      self.game.world.player_inventory,
-                                      'DROP')
+                    inventory_menu(key)
             except curses.error:
                 pass
 
