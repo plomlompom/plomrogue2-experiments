@@ -47,11 +47,12 @@ class ThingAnimate(Thing):
         self._last_task_result = None
         self._stencil = None
 
-    def move_towards_position(self, target):
+    def move_on_dijkstra_map(self, targets):
         dijkstra_map = type(self.world.map_)(self.world.map_.size)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
-        dijkstra_map[target] = 0
+        for target in targets:
+            dijkstra_map[target] = 0
         shrunk = True
         visible_map = self.get_visible_map()
         while shrunk:
@@ -75,8 +76,7 @@ class ThingAnimate(Thing):
                 if n_new < n:
                     n = n_new
                     target_direction = direction
-        if target_direction:
-            self.set_task('MOVE', (target_direction,))
+        return target_direction
 
     def hunt_player(self):
         visible_things = self.get_visible_things()
@@ -87,14 +87,42 @@ class ThingAnimate(Thing):
                 break
         if target is not None:
             try:
-                self.move_towards_position(target)
+                target_dir = self.move_on_dijkstra_map([target])
+                if target_dir is not None:
+                    self.set_task('MOVE', (target_dir,))
+                    return True
+            except GameError:
+                pass
+        return False
+
+    def hunt_food_satisfaction(self):
+        for id_ in self.inventory:
+            t = self.world.get_thing(id_)
+            if t.type_ == 'food':
+                self.set_task('EAT', (id_,))
+                return True
+        for id_ in self.get_pickable_items():
+            t = self.world.get_thing(id_)
+            if t.type_ == 'food':
+                self.set_task('PICKUP', (id_,))
+                return True
+        visible_things = self.get_visible_things()
+        food_targets = []
+        for t in visible_things:
+            if t.type_ == 'food':
+                food_targets += [t.position]
+        target_dir = self.move_on_dijkstra_map(food_targets)
+        if target_dir:
+            try:
+                self.set_task('MOVE', (target_dir,))
                 return True
             except GameError:
                 pass
         return False
 
     def decide_task(self):
-        if not self.hunt_player():
+        #if not self.hunt_player():
+        if not self.hunt_food_satisfaction():
             self.set_task('WAIT')
 
     def set_task(self, task_name, args=()):
