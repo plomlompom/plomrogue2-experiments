@@ -33,6 +33,13 @@ class WorldBase:
             return t
         return None
 
+    def things_at_pos(self, yx):
+        things = []
+        for t in self.things:
+            if t.position == yx:
+                things += [t]
+        return things
+
 
 
 class World(WorldBase):
@@ -84,8 +91,15 @@ class World(WorldBase):
 
         def add_thing(type_):
             t = self.game.thing_types[type_](self)
-            t.position = (random.randint(0, yx[0] -1),
-                          random.randint(0, yx[1] - 1))
+            while True:
+                new_pos = (random.randint(0, yx[0] -1),
+                           random.randint(0, yx[1] - 1))
+                if self.map_[new_pos] != '.':
+                    continue
+                if len(self.things_at_pos(new_pos)) > 0:
+                    continue
+                break
+            t.position = new_pos
             self.things += [t]
             return t
 

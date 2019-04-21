@@ -320,9 +320,8 @@ class DescriptorWidget(TextLinesWidget):
                 get_position_index(self.tui.examiner_position)
         terrain = self.tui.game.world.map_.terrain[pos_i]
         lines = [terrain]
-        for t in self.tui.game.world.things:
-            if t.position == self.tui.examiner_position:
-                lines += [t.type_]
+        for t in self.tui.game.world.things_at_pos(self.tui.examiner_position):
+            lines += [t.type_]
         return lines
 
 
