@@ -47,7 +47,7 @@ class ThingAnimate(Thing):
         self._last_task_result = None
         self._stencil = None
 
-    def move_towards_target(self, target):
+    def move_towards_position(self, target):
         dijkstra_map = type(self.world.map_)(self.world.map_.size)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
@@ -78,7 +78,7 @@ class ThingAnimate(Thing):
         if target_direction:
             self.set_task('MOVE', (target_direction,))
 
-    def decide_task(self):
+    def hunt_player(self):
         visible_things = self.get_visible_things()
         target = None
         for t in visible_things:
@@ -87,11 +87,15 @@ class ThingAnimate(Thing):
                 break
         if target is not None:
             try:
-                self.move_towards_target(target)
-                return
+                self.move_towards_position(target)
+                return True
             except GameError:
                 pass
-        self.set_task('WAIT')
+        return False
+
+    def decide_task(self):
+        if not self.hunt_player():
+            self.set_task('WAIT')
 
     def set_task(self, task_name, args=()):
         task_class = self.world.game.tasks[task_name]
