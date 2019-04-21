@@ -13,6 +13,7 @@ from plomrogue.parser import Parser
 from plomrogue.io import GameIO
 from plomrogue.misc import quote, stringify_yx
 from plomrogue.things import Thing, ThingMonster, ThingHuman, ThingFood
+import random
 
 
 
@@ -80,17 +81,26 @@ class World(WorldBase):
             for thing in self.things[player_i+1:]:
                 thing.proceed()
             self.turn += 1
+            for pos in self.map_:
+                if self.map_[pos] == '.' and \
+                   len(self.things_at_pos(pos)) == 0 and \
+                   random.random() > 0.999:
+                    self.add_thing_at('food', pos)
             for thing in self.things[:player_i]:
                 thing.proceed()
             self.player.proceed(is_AI=False)
             if self.player.task is None or not self.player_is_alive:
                 break
 
-    def make_new(self, yx, seed):
-        import random
+    def add_thing_at(self, type_, pos):
+        t = self.game.thing_types[type_](self)
+        t.position = pos
+        self.things += [t]
+        return t
 
-        def add_thing(type_):
-            t = self.game.thing_types[type_](self)
+    def make_new(self, yx, seed):
+
+        def add_thing_at_random(type_):
             while True:
                 new_pos = (random.randint(0, yx[0] -1),
                            random.randint(0, yx[1] - 1))
@@ -98,10 +108,7 @@ class World(WorldBase):
                     continue
                 if len(self.things_at_pos(new_pos)) > 0:
                     continue
-                break
-            t.position = new_pos
-            self.things += [t]
-            return t
+                return self.add_thing_at(type_, new_pos)
 
         self.things = []
         random.seed(seed)
@@ -113,14 +120,14 @@ class World(WorldBase):
                 continue
             self.map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
 
-        player = add_thing('human')
+        player = add_thing_at_random('human')
         self.player_id = player.id_
-        add_thing('monster')
-        add_thing('monster')
-        add_thing('food')
-        add_thing('food')
-        add_thing('food')
-        add_thing('food')
+        add_thing_at_random('monster')
+        add_thing_at_random('monster')
+        add_thing_at_random('food')
+        add_thing_at_random('food')
+        add_thing_at_random('food')
+        add_thing_at_random('food')
         return 'success'
 
 
