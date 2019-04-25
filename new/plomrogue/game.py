@@ -184,8 +184,8 @@ class Game:
         """Send out game state data relevant to clients."""
 
         self.io.send('TURN ' + str(self.world.turn))
-        self.io.send('MAP ' + stringify_yx(visible_map.size))
         visible_map = self.world.player.get_visible_map()
+        self.io.send('MAP ' + stringify_yx(visible_map.size))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things, offset = self.world.player.get_visible_things()
