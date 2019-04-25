@@ -58,9 +58,14 @@ class ClientMap(MapHex):
             return ''.join(map_view_chars).split('\n')
 
         map_lines = map_cells_to_lines(map_cells)
-        self.y_cut(map_lines, center[0], size[0])
+        if len(map_lines) % 2 == 0:
+            map_lines = map_lines[1:]
+        else:
+            for i in range(len(map_lines)):
+                map_lines[i] = '0' + map_lines[i]
+        self.y_cut(map_lines, center[1][0], size[0])
         map_width = self.size[1] * 2 + 1
-        self.x_cut(map_lines, center[1] * 2, size[1], map_width)
+        self.x_cut(map_lines, center[1][1] * 2, size[1], map_width)
         return map_lines
 
 
@@ -73,13 +78,13 @@ class World(WorldBase):
         on any update, even before we actually receive map data.
         """
         super().__init__(*args, **kwargs)
-        self.map_ = ClientMap()
+        self.maps = {(0,0): ClientMap()}
         self.player_inventory = []
         self.player_id = 0
         self.pickable_items = []
 
-    def new_map(self, yx):
-        self.map_ = ClientMap(yx)
+    def new_map(self, map_pos, size):
+        self.maps[map_pos] = ClientMap(size)
 
     @property
     def player(self):
@@ -107,7 +112,7 @@ cmd_TURN.argtypes = 'int:nonneg'
 
 
 def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
-    game.world.map_.set_line(y, terrain_line)
+    game.world.maps[(0,0)].set_line(y, terrain_line)
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
 
@@ -316,9 +321,9 @@ class DescriptorWidget(TextLinesWidget):
 
     def get_text_lines(self):
         lines = []
-        pos_i = self.tui.game.world.map_.\
-                get_position_index(self.tui.examiner_position)
-        terrain = self.tui.game.world.map_.terrain[pos_i]
+        pos_i = self.tui.game.world.maps[(0,0)].\
+                get_position_index(self.tui.examiner_position[1])
+        terrain = self.tui.game.world.maps[(0,0)].terrain[pos_i]
         lines = [terrain]
         for t in self.tui.game.world.things_at_pos(self.tui.examiner_position):
             lines += [t.type_]
@@ -381,9 +386,12 @@ class MapWidget(Widget):
     def draw(self):
 
         def annotated_terrain():
-            terrain_as_list = list(self.tui.game.world.map_.terrain[:])
+            terrain_as_list = list(self.tui.game.world.maps[(0,0)].terrain[:])
             for t in self.tui.game.world.things:
-                pos_i = self.tui.game.world.map_.get_position_index(t.position)
+                if t.id_ in self.tui.game.world.player_inventory:
+                    continue
+                pos_i = self.tui.game.world.maps[(0,0)].\
+                        get_position_index(t.position[1])
                 symbol = self.tui.game.symbol_for_type(t.type_)
                 if terrain_as_list[pos_i][0] in {'f', '@', 'm'}:
                     old_symbol = terrain_as_list[pos_i][0]
@@ -393,8 +401,8 @@ class MapWidget(Widget):
                 else:
                     terrain_as_list[pos_i] = symbol
             if self.tui.examiner_mode:
-                pos_i = self.tui.game.world.map_.\
-                        get_position_index(self.tui.examiner_position)
+                pos_i = self.tui.game.world.maps[(0,0)].\
+                        get_position_index(self.tui.examiner_position[1])
                 terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
             return terrain_as_list
 
@@ -430,7 +438,7 @@ class MapWidget(Widget):
                     chars_with_attrs += [c]
             return chars_with_attrs
 
-        if self.tui.game.world.map_.terrain == '':
+        if self.tui.game.world.maps[(0,0)].terrain == '':
             lines = []
             pad_y(lines)
             self.safe_write(''.join(lines))
@@ -440,8 +448,8 @@ class MapWidget(Widget):
         center = self.tui.game.world.player.position
         if self.tui.examiner_mode:
             center = self.tui.examiner_position
-        lines = self.tui.game.world.map_.format_to_view(annotated_terrain,
-                                                        center, self.size)
+        lines = self.tui.game.world.maps[(0,0)].\
+                format_to_view(annotated_terrain, center, self.size)
         pad_or_cut_x(lines)
         pad_y(lines)
         self.safe_write(lines_to_colored_chars(lines))
@@ -481,7 +489,7 @@ class TUI:
         self.parser = Parser(self.game)
         self.to_update = {}
         self.item_pointer = 0
-        self.examiner_position = (0, 0)
+        self.examiner_position = ((0,0), (0, 0))
         self.examiner_mode = False
         self.popup_text = 'Hi bob'
         self.to_send = []
@@ -545,9 +553,10 @@ class TUI:
 
         def move_examiner(direction):
             start_pos = self.examiner_position
-            new_examine_pos = self.game.world.map_.move(start_pos, direction)
+            new_examine_pos = self.game.world.maps[(0,0)].\
+                              move(start_pos[0], direction)
             if new_examine_pos:
-                self.examiner_position = new_examine_pos
+                self.examiner_position[1] = new_examine_pos
             self.to_update['map'] = True
 
         def switch_to_pick_or_drop(target_widget):

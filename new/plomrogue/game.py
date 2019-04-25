@@ -34,10 +34,10 @@ class WorldBase:
             return t
         return None
 
-    def things_at_pos(self, yx):
+    def things_at_pos(self, pos):
         things = []
         for t in self.things:
-            if t.position == yx:
+            if t.position == pos:
                 things += [t]
         return things
 
@@ -49,6 +49,7 @@ class World(WorldBase):
         super().__init__(*args, **kwargs)
         self.player_id = 0
         self.player_is_alive = True
+        self.maps = {}
 
     @property
     def player(self):
@@ -59,8 +60,8 @@ class World(WorldBase):
             return 0
         return self.things[-1].id_ + 1
 
-    def new_map(self, yx):
-        self.map_ = self.game.map_type(yx)
+    def new_map(self, map_pos, size):
+        self.maps[map_pos] = self.game.map_type(size)
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -81,11 +82,11 @@ class World(WorldBase):
             for thing in self.things[player_i+1:]:
                 thing.proceed()
             self.turn += 1
-            for pos in self.map_:
-                if self.map_[pos] == '.' and \
-                   len(self.things_at_pos(pos)) == 0 and \
+            for pos in self.maps[(0,0)]:
+                if self.maps[(0,0)][pos] == '.' and \
+                   len(self.things_at_pos(((0,0), pos))) == 0 and \
                    random.random() > 0.999:
-                    self.add_thing_at('food', pos)
+                    self.add_thing_at('food', ((0,0), pos))
             for thing in self.things[:player_i]:
                 thing.proceed()
             self.player.proceed(is_AI=False)
@@ -102,9 +103,10 @@ class World(WorldBase):
 
         def add_thing_at_random(type_):
             while True:
-                new_pos = (random.randint(0, yx[0] -1),
-                           random.randint(0, yx[1] - 1))
-                if self.map_[new_pos] != '.':
+                new_pos = ((0,0),
+                           (random.randint(0, yx[0] -1),
+                            random.randint(0, yx[1] -1)))
+                if self.maps[new_pos[0]][new_pos[1]] != '.':
                     continue
                 if len(self.things_at_pos(new_pos)) > 0:
                     continue
@@ -113,12 +115,21 @@ class World(WorldBase):
         self.things = []
         random.seed(seed)
         self.turn = 0
-        self.new_map(yx)
-        for pos in self.map_:
+        self.maps = {}
+        self.new_map((0,0), yx)
+        #self.new_map((0,1), yx)
+        #self.new_map((1,1), yx)
+        #self.new_map((1,0), yx)
+        #self.new_map((1,-1), yx)
+        #self.new_map((0,-1), yx)
+        #self.new_map((-1,-1), yx)
+        #self.new_map((-1,0), yx)
+        #self.new_map((-1,1), yx)
+        for pos in self.maps[(0,0)]:
             if 0 in pos or (yx[0] - 1) == pos[0] or (yx[1] - 1) == pos[1]:
-                self.map_[pos] = '#'
+                self.maps[(0,0)][pos] = '#'
                 continue
-            self.map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
+            self.maps[(0,0)][pos] = random.choice(('.', '.', '.', '.', 'x'))
 
         player = add_thing_at_random('human')
         self.player_id = player.id_
@@ -164,7 +175,7 @@ class Game:
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':
-            return self.world.map_.get_directions()
+            return self.world.maps[(0,0)].get_directions()
         elif string_option_type == 'thingtype':
             return list(self.thing_types.keys())
         return None
@@ -173,15 +184,18 @@ class Game:
         """Send out game state data relevant to clients."""
 
         self.io.send('TURN ' + str(self.world.turn))
-        self.io.send('MAP ' + stringify_yx(self.world.map_.size))
+        self.io.send('MAP ' + stringify_yx(visible_map.size))
         visible_map = self.world.player.get_visible_map()
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
-        visible_things = self.world.player.get_visible_things()
+        visible_things, offset = self.world.player.get_visible_things()
         for thing in visible_things:
+            offset_pos = (thing.position[1][0] - offset[0],
+                          thing.position[1][1] - offset[1])
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s' % (thing.id_,
-                                              stringify_yx(thing.position)))
+            self.io.send('THING_POS %s %s %s' % (thing.id_,
+                                                 stringify_yx(thing.position[0]),
+                                                 stringify_yx(offset_pos)))
             if hasattr(thing, 'health'):
                 self.io.send('THING_HEALTH %s %s' % (thing.id_,
                                                      thing.health))
@@ -193,8 +207,9 @@ class Game:
         for id_ in self.world.player.inventory:
             thing = self.world.get_thing(id_)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s' % (thing.id_,
-                                              stringify_yx(thing.position)))
+            self.io.send('THING_POS %s %s %s' % (thing.id_,
+                                                 stringify_yx(thing.position[0]),
+                                                 stringify_yx(thing.position[1])))
         self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):

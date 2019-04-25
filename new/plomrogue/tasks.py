@@ -19,6 +19,8 @@ class Task:
         for arg in self.args:
             if type(arg) == str:
                 stringed_args += [quote(arg)]
+            elif type(arg) == int:
+                stringed_args += [str(arg)]
             else:
                 raise GameError('stringifying arg type not implemented')
         return ' '.join(stringed_args)
@@ -36,18 +38,20 @@ class Task_MOVE(Task):
     argtypes = 'string:direction'
 
     def check(self):
-        test_pos = self.thing.world.map_.move(self.thing.position, self.args[0])
-        if test_pos is None:
+        test_pos = ((0,0),
+                    self.thing.world.maps[(0,0)].
+                    move(self.thing.position[1], self.args[0]))
+        if test_pos == ((0,0), None):
             raise GameError('would move outside map bounds')
-        if self.thing.world.map_[test_pos] != '.':
+        if self.thing.world.maps[test_pos[0]][test_pos[1]] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
         for t in self.thing.world.things_at_pos(test_pos):
             if t.blocking:
                 raise GameError('%s would move into other thing' % self.thing.id_)
 
     def do(self):
-        self.thing.position = self.thing.world.map_.move(self.thing.position,
-                                                         self.args[0])
+        self.thing.position = (0,0), self.thing.world.maps[(0,0)].\
+                                     move(self.thing.position[1], self.args[0])
         for id_ in self.thing.inventory:
             t = self.thing.world.get_thing(id_)
             t.position = self.thing.position

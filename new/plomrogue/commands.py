@@ -12,7 +12,7 @@ def cmd_GET_GAMESTATE(game, connection_id):
 
 def cmd_MAP(game, yx):
     """Create new map of size yx and only '?' cells."""
-    game.world.new_map(yx)
+    game.world.new_map((0,0), yx)
 cmd_MAP.argtypes = 'yx_tuple:pos'
 
 def cmd_THING_TYPE(game, i, type_):
@@ -36,10 +36,10 @@ def cmd_THING_TYPE(game, i, type_):
     game.world.things[t_old_index] = t_new
 cmd_THING_TYPE.argtypes = 'int:nonneg string:thingtype'
 
-def cmd_THING_POS(game, i, yx):
+def cmd_THING_POS(game, i, big_yx, small_yx):
     t = game.world.get_thing(i)
-    t.position = tuple(yx)
-cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
+    t.position = (big_yx, small_yx)
+cmd_THING_POS.argtypes = 'int:nonneg yx_tuple yx_tuple'
 
 def cmd_THING_INVENTORY(game, id_, ids):
     t = game.world.get_thing(id_)
@@ -60,7 +60,7 @@ def cmd_GET_PICKABLE_ITEMS(game, connection_id):
         game.io.send('PICKABLE_ITEMS ,')
 
 def cmd_TERRAIN_LINE(game, y, terrain_line):
-    game.world.map_.set_line(y, terrain_line)
+    game.world.maps[(0,0)].set_line(y, terrain_line)
 cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
 
 def cmd_PLAYER_ID(game, id_):
@@ -90,13 +90,14 @@ def cmd_SAVE(game):
     save_file_name = game.io.game_file_name + '.save'
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
-        write(f, 'MAP ' + stringify_yx(game.world.map_.size))
-        for y, line in game.world.map_.lines():
+        write(f, 'MAP ' + stringify_yx(game.world.maps[(0,0)].size))
+        for y, line in game.world.maps[(0,0)].lines():
             write(f, 'TERRAIN_LINE %5s %s' % (y, quote(line)))
         for thing in game.world.things:
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
-            write(f, 'THING_POS %s %s' % (thing.id_,
-                                          stringify_yx(thing.position)))
+            write(f, 'THING_POS %s %s %s' % (thing.id_,
+                                             stringify_yx(thing.position[0]),
+                                             stringify_yx(thing.position[1])))
             if hasattr(thing, 'health'):
                 write(f, 'THING_HEALTH %s %s' % (thing.id_, thing.health))
             if len(thing.inventory) > 0:

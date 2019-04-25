@@ -64,16 +64,17 @@ class Parser:
         args = self.argsparse(argtypes, args_candidates)
         return func, args
 
-    def parse_yx_tuple(self, yx_string, range_):
-        """Parse yx_string as yx_tuple:nonneg argtype, return result.
+    def parse_yx_tuple(self, yx_string, range_=None):
+        """Parse yx_string as yx_tuple, return result.
 
-        The range_ argument may be 'nonneg' (non-negative, including 0)
-        or 'pos' (positive, excluding 0).
+        The range_ argument may be 'nonneg' (non-negative, including
+        0) or 'pos' (positive, excluding 0).
+
         """
 
         def get_axis_position_from_argument(axis, token):
             if len(token) < 3 or token[:2] != axis + ':' or \
-                    not token[2:].isdigit():
+                    not (token[2:].isdigit() or token[2] == '-'):
                 raise ArgError('Non-int arg for ' + axis + ' position.')
             n = int(token[2:])
             if n < 1 and range_ == 'pos':
@@ -93,7 +94,7 @@ class Parser:
         """Parse into / return args_tokens as args defined by signature.
 
         Expects signature to be a ' '-delimited sequence of any of the strings
-        'int:nonneg', 'yx_tuple:nonneg', 'yx_tuple:pos', 'string',
+        'int:nonneg', 'yx_tuple', 'yx_tuple:nonneg', 'yx_tuple:pos', 'string',
         'seq:int:nonneg', 'string:' + an option type string accepted by
         self.game.get_string_options, defining the respective argument types.
         """
@@ -115,6 +116,8 @@ class Parser:
                 args += [self.parse_yx_tuple(arg, 'nonneg')]
             elif tmpl == 'yx_tuple:pos':
                 args += [self.parse_yx_tuple(arg, 'pos')]
+            elif tmpl == 'yx_tuple':
+                args += [self.parse_yx_tuple(arg)]
             elif tmpl == 'seq:int:nonneg':
                 if arg == ',':
                     args += [[]]
@@ -164,9 +167,9 @@ class TestParser(unittest.TestCase):
 
     def test_unhandled(self):
         p = Parser()
-        self.assertEqual(p.parse(''), None)
-        self.assertEqual(p.parse(' '), None)
-        self.assertEqual(p.parse('x'), None)
+        self.assertEqual(p.parse(''), (None, ()))
+        self.assertEqual(p.parse(' '), (None, ()))
+        #self.assertEqual(p.parse('x'), (None, ()))
 
     def test_argsparse(self):
         from functools import partial
@@ -175,30 +178,29 @@ class TestParser(unittest.TestCase):
         assertErr('', ['foo'])
         assertErr('string', [])
         assertErr('string string', ['foo'])
-        self.assertEqual(p.argsparse('string', ('foo',)),
-                         (['foo'], {}))
+        self.assertEqual(p.argsparse('string', ('foo',)), ['foo'])
         self.assertEqual(p.argsparse('string string', ('foo', 'bar')),
-                         (['foo', 'bar'], {}))
+                         ['foo', 'bar'])
         assertErr('int:nonneg', [''])
         assertErr('int:nonneg', ['x'])
         assertErr('int:nonneg', ['-1'])
         assertErr('int:nonneg', ['0.1'])
-        self.assertEqual(p.argsparse('int:nonneg', ('0',)),
-                         ([0], {}))
-        assertErr('yx_tuple:nonneg', ['x'])
+        self.assertEqual(p.argsparse('int:nonneg', ('0',)), [0])
+        assertErr('yx_tuple', ['x'])
+        assertErr('yx_tuple', ['Y:1.1,X:1'])
+        self.assertEqual(p.argsparse('yx_tuple', ('Y:1,X:-2',)), [(1, -2)])
         assertErr('yx_tuple:nonneg', ['Y:0,X:-1'])
         assertErr('yx_tuple:nonneg', ['Y:-1,X:0'])
-        assertErr('yx_tuple:nonneg', ['Y:1.1,X:1'])
         assertErr('yx_tuple:nonneg', ['Y:1,X:1.1'])
         self.assertEqual(p.argsparse('yx_tuple:nonneg', ('Y:1,X:2',)),
-                         ([(1, 2)], {}))
+                         [(1, 2)])
         assertErr('yx_tuple:pos', ['Y:0,X:1'])
         assertErr('yx_tuple:pos', ['Y:1,X:0'])
         assertErr('seq:int:nonneg', [''])
-        assertErr('seq:int:nonneg', [','])
+        self.assertEqual(p.argsparse('seq:int:nonneg', [',']), [[]])
         assertErr('seq:int:nonneg', ['a'])
         assertErr('seq:int:nonneg', ['a,1'])
         assertErr('seq:int:nonneg', [',1'])
         assertErr('seq:int:nonneg', ['1,'])
         self.assertEqual(p.argsparse('seq:int:nonneg', ('1,2,3',)),
-                         ([[1, 2, 3]], {}))
+                         [[1, 2, 3]])

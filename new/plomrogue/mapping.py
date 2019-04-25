@@ -146,6 +146,7 @@ class FovMap:
     def __init__(self, source_map, yx):
         self.source_map = source_map
         self.size = self.source_map.size
+        self.fov_radius = (self.size[0] / 2) - 0.5
         self.terrain = '?' * self.size_i
         self[yx] = '.'
         self.shadow_cones = []
@@ -236,11 +237,14 @@ class FovMap:
         # would lose shade growth through hexes at shade borders.)
 
         # TODO: Start circling only in earliest obstacle distance.
+        # TODO: get rid of circle_in_map logic
         circle_in_map = True
         distance = 1
         yx = yx[:]
         #print('DEBUG CIRCLE_OUT', yx)
         while circle_in_map:
+            if distance > self.fov_radius:
+                break
             circle_in_map = False
             yx, _ = self.basic_circle_out_move(yx, 'RIGHT')
             for dir_i in range(len(self.circle_out_directions)):

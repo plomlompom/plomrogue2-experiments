@@ -5,7 +5,7 @@ from plomrogue.errors import GameError
 class ThingBase:
     type_ = '?'
 
-    def __init__(self, world, id_=None, position=(0,0)):
+    def __init__(self, world, id_=None, position=((0,0), (0,0))):
         self.world = world
         self.position = position
         if id_ is None:
@@ -45,16 +45,17 @@ class ThingAnimate(Thing):
         super().__init__(*args, **kwargs)
         self.set_task('WAIT')
         self._last_task_result = None
-        self._stencil = None
+        self._radius = 16
+        self.unset_surroundings()
 
-    def move_on_dijkstra_map(self, targets):
-        dijkstra_map = type(self.world.map_)(self.world.map_.size)
+    def move_on_dijkstra_map(self, own_pos, targets):
+        visible_map = self.get_visible_map()
+        dijkstra_map = self.world.game.map_type(visible_map.size)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
         for target in targets:
             dijkstra_map[target] = 0
         shrunk = True
-        visible_map = self.get_visible_map()
         while shrunk:
             shrunk = False
             for pos in dijkstra_map:
@@ -66,7 +67,7 @@ class ThingAnimate(Thing):
                     if yx is not None and dijkstra_map[yx] < dijkstra_map[pos] - 1:
                         dijkstra_map[pos] = dijkstra_map[yx] + 1
                         shrunk = True
-        neighbors = dijkstra_map.get_neighbors(tuple(self.position))
+        neighbors = dijkstra_map.get_neighbors(own_pos)
         n = n_max
         target_direction = None
         for direction in sorted(neighbors.keys()):
@@ -79,15 +80,19 @@ class ThingAnimate(Thing):
         return target_direction
 
     def hunt_player(self):
-        visible_things = self.get_visible_things()
+        visible_things, offset = self.get_visible_things()
         target = None
         for t in visible_things:
             if t.type_ == 'human':
-                target = t.position
+                target = (t.position[1][0] - offset[0],
+                          t.position[1][1] - offset[1])
                 break
         if target is not None:
             try:
-                target_dir = self.move_on_dijkstra_map([target])
+                offset_self_pos = (self.position[1][0] - offset[0],
+                                   self.position[1][1] - offset[1])
+                target_dir = self.move_on_dijkstra_map(offset_self_pos,
+                                                       [target])
                 if target_dir is not None:
                     self.set_task('MOVE', (target_dir,))
                     return True
@@ -106,12 +111,16 @@ class ThingAnimate(Thing):
             if t.type_ == 'food':
                 self.set_task('PICKUP', (id_,))
                 return True
-        visible_things = self.get_visible_things()
+        visible_things, offset = self.get_visible_things()
         food_targets = []
         for t in visible_things:
             if t.type_ == 'food':
-                food_targets += [t.position]
-        target_dir = self.move_on_dijkstra_map(food_targets)
+                food_targets += [(t.position[1][0] - offset[0],
+                                  t.position[1][1] - offset[1])]
+        offset_self_pos = (self.position[1][0] - offset[0],
+                           self.position[1][1] - offset[1])
+        target_dir = self.move_on_dijkstra_map(offset_self_pos,
+                                               food_targets)
         if target_dir:
             try:
                 self.set_task('MOVE', (target_dir,))
@@ -144,7 +153,7 @@ class ThingAnimate(Thing):
         None. If is_AI, calls .decide_task to decide a self.task.
 
         """
-        self._stencil = None
+        self.unset_surroundings()
         self.health -= 1
         if self.health <= 0:
             if self is self.world.player:
@@ -173,35 +182,80 @@ class ThingAnimate(Thing):
             except GameError:
                 self.set_task('WAIT')
 
+    def unset_surroundings(self):
+        self._stencil = None
+        self._surrounding_map = None
+        self._surroundings_offset = None
+
+    def must_fix_indentation(self):
+        return self._radius % 2 != self.position[1][0] % 2
+
+    def get_surroundings_offset(self):
+        if self._surroundings_offset is not None:
+            return self._surroundings_offset
+        add_line = self.must_fix_indentation()
+        offset_y = self.position[1][0] - self._radius - int(add_line)
+        offset_x = self.position[1][1] - self._radius
+        self._surroundings_offset = (offset_y, offset_x)
+        return self._surroundings_offset
+
+    def get_surrounding_map(self):
+        if self._surrounding_map is not None:
+            return self._surrounding_map
+        offset = self.get_surroundings_offset()
+        add_line = self.must_fix_indentation()
+        self._surrounding_map = self.world.game.\
+                                map_type(size=(self._radius*2+1+int(add_line),
+                                               self._radius*2+1))
+        for pos in self._surrounding_map:
+            offset_pos = (pos[0] + offset[0], pos[1] + offset[1])
+            if offset_pos[0] >= 0 and \
+               offset_pos[0] < self.world.maps[(0,0)].size[0] and \
+               offset_pos[1] >= 0 and \
+               offset_pos[1] < self.world.maps[(0,0)].size[1]:
+                self._surrounding_map[pos] = self.world.maps[(0,0)][offset_pos]
+        return self._surrounding_map
+
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        self._stencil = self.world.map_.get_fov_map(self.position)
+        m = self.get_surrounding_map()
+        offset = self.get_surroundings_offset()
+        fov_center = (self.position[1][0] - offset[0],
+                      self.position[1][1] - offset[1])
+        self._stencil = m.get_fov_map(fov_center)
         return self._stencil
 
     def get_visible_map(self):
         stencil = self.get_stencil()
-        m = self.world.map_.new_from_shape(' ')
+        m = self.get_surrounding_map().new_from_shape(' ')
         for pos in m:
             if stencil[pos] == '.':
-                m[pos] = self.world.map_[pos]
+                m[pos] = self._surrounding_map[pos]
         return m
 
     def get_visible_things(self):
         stencil = self.get_stencil()
+        offset = self.get_surroundings_offset()
         visible_things = []
         for thing in self.world.things:
-            if (not thing.in_inventory) and stencil[thing.position] == '.':
+            if abs(thing.position[1][0] - self.position[1][0]) > self._radius or\
+               abs(thing.position[1][1] - self.position[1][1]) > self._radius:
+                continue
+            offset_pos = (thing.position[1][0] - offset[0],
+                          thing.position[1][1] - offset[1])
+            if (not thing.in_inventory) and stencil[offset_pos] == '.':
                 visible_things += [thing]
-        return visible_things
+        return visible_things, offset
 
     def get_pickable_items(self):
         pickable_ids = []
-        for t in [t for t in self.get_visible_things() if
+        visible_things, _ = self.get_visible_things()
+        for t in [t for t in visible_things if
                   isinstance(t, ThingItem) and
                   (t.position == self.position or
-                   t.position in
-                   self.world.map_.get_neighbors(self.position).values())]:
+                   t.position[1] in
+                   self.world.maps[(0,0)].get_neighbors(self.position[1]).values())]:
             pickable_ids += [t.id_]
         return pickable_ids
 
