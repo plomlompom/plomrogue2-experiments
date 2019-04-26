@@ -80,7 +80,8 @@ class ThingAnimate(Thing):
         return target_direction
 
     def hunt_player(self):
-        visible_things, offset = self.get_visible_things()
+        visible_things = self.get_visible_things()
+        offset = self.get_surroundings_offset()
         target = None
         for t in visible_things:
             if t.type_ == 'human':
@@ -111,7 +112,8 @@ class ThingAnimate(Thing):
             if t.type_ == 'food':
                 self.set_task('PICKUP', (id_,))
                 return True
-        visible_things, offset = self.get_visible_things()
+        visible_things = self.get_visible_things()
+        offset = self.get_surroundings_offset()
         food_targets = []
         for t in visible_things:
             if t.type_ == 'food':
@@ -274,11 +276,11 @@ class ThingAnimate(Thing):
                 continue
             if (not thing.in_inventory) and stencil[(pos_y, pos_x)] == '.':
                 visible_things += [thing]
-        return visible_things, offset
+        return visible_things
 
     def get_pickable_items(self):
         pickable_ids = []
-        visible_things, _ = self.get_visible_things()
+        visible_things = self.get_visible_things()
         for t in [t for t in visible_things if
                   isinstance(t, ThingItem) and
                   (t.position == self.position or

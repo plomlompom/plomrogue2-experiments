@@ -3,8 +3,7 @@ import curses
 import socket
 import threading
 from plomrogue.parser import ArgError, Parser
-from plomrogue.commands import (cmd_MAP, cmd_THING_POS, cmd_PLAYER_ID,
-                                cmd_THING_HEALTH)
+from plomrogue.commands import cmd_PLAYER_ID, cmd_THING_HEALTH
 from plomrogue.game import Game, WorldBase
 from plomrogue.mapping import MapHex
 from plomrogue.io import PlomSocket
@@ -63,9 +62,9 @@ class ClientMap(MapHex):
         else:
             for i in range(len(map_lines)):
                 map_lines[i] = '0' + map_lines[i]
-        self.y_cut(map_lines, center[1][0], size[0])
+        self.y_cut(map_lines, center[0], size[0])
         map_width = self.size[1] * 2 + 1
-        self.x_cut(map_lines, center[1][1] * 2, size[1], map_width)
+        self.x_cut(map_lines, center[1] * 2, size[1], map_width)
         return map_lines
 
 
@@ -78,13 +77,15 @@ class World(WorldBase):
         on any update, even before we actually receive map data.
         """
         super().__init__(*args, **kwargs)
-        self.maps = {(0,0): ClientMap()}
+        self.map_ = ClientMap()
+        self.offset = (0,0)
         self.player_inventory = []
         self.player_id = 0
         self.pickable_items = []
 
-    def new_map(self, map_pos, size):
-        self.maps[map_pos] = ClientMap(size)
+    def new_map(self, offset, size):
+        self.map_ = ClientMap(size)
+        self.offset = offset
 
     @property
     def player(self):
@@ -111,8 +112,13 @@ def cmd_TURN(game, n):
 cmd_TURN.argtypes = 'int:nonneg'
 
 
+def cmd_VISIBLE_MAP(game, offset, size):
+    game.world.new_map(offset, size)
+cmd_VISIBLE_MAP.argtypes = 'yx_tuple yx_tuple:pos'
+
+
 def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
-    game.world.maps[(0,0)].set_line(y, terrain_line)
+    game.world.map_.set_line(y, terrain_line)
 cmd_VISIBLE_MAP_LINE.argtypes = 'int:nonneg string'
 
 
@@ -126,6 +132,12 @@ def cmd_THING_TYPE(game, i, type_):
     t = game.world.get_thing(i)
     t.type_ = type_
 cmd_THING_TYPE.argtypes = 'int:nonneg string'
+
+
+def cmd_THING_POS(game, i, yx):
+    t = game.world.get_thing(i)
+    t.position = yx
+cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
 
 def cmd_PLAYER_INVENTORY(game, ids):
@@ -153,7 +165,7 @@ class Game:
                          'PLAYER_ID': cmd_PLAYER_ID,
                          'PLAYER_INVENTORY': cmd_PLAYER_INVENTORY,
                          'GAME_STATE_COMPLETE': cmd_GAME_STATE_COMPLETE,
-                         'MAP': cmd_MAP,
+                         'VISIBLE_MAP': cmd_VISIBLE_MAP,
                          'PICKABLE_ITEMS': cmd_PICKABLE_ITEMS,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_HEALTH': cmd_THING_HEALTH,
@@ -191,6 +203,8 @@ class Game:
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
+        with open('log', 'w') as f:
+            f.write(self.log_text)
         self.tui.to_update['log'] = True
 
     def symbol_for_type(self, type_):
@@ -321,9 +335,9 @@ class DescriptorWidget(TextLinesWidget):
 
     def get_text_lines(self):
         lines = []
-        pos_i = self.tui.game.world.maps[(0,0)].\
-                get_position_index(self.tui.examiner_position[1])
-        terrain = self.tui.game.world.maps[(0,0)].terrain[pos_i]
+        pos_i = self.tui.game.world.map_.\
+                get_position_index(self.tui.examiner_position)
+        terrain = self.tui.game.world.map_.terrain[pos_i]
         lines = [terrain]
         for t in self.tui.game.world.things_at_pos(self.tui.examiner_position):
             lines += [t.type_]
@@ -386,12 +400,12 @@ class MapWidget(Widget):
     def draw(self):
 
         def annotated_terrain():
-            terrain_as_list = list(self.tui.game.world.maps[(0,0)].terrain[:])
+            terrain_as_list = list(self.tui.game.world.map_.terrain[:])
             for t in self.tui.game.world.things:
                 if t.id_ in self.tui.game.world.player_inventory:
                     continue
-                pos_i = self.tui.game.world.maps[(0,0)].\
-                        get_position_index(t.position[1])
+                pos_i = self.tui.game.world.map_.\
+                        get_position_index(t.position)
                 symbol = self.tui.game.symbol_for_type(t.type_)
                 if terrain_as_list[pos_i][0] in {'f', '@', 'm'}:
                     old_symbol = terrain_as_list[pos_i][0]
@@ -401,8 +415,8 @@ class MapWidget(Widget):
                 else:
                     terrain_as_list[pos_i] = symbol
             if self.tui.examiner_mode:
-                pos_i = self.tui.game.world.maps[(0,0)].\
-                        get_position_index(self.tui.examiner_position[1])
+                pos_i = self.tui.game.world.map_.\
+                        get_position_index(self.tui.examiner_position)
                 terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
             return terrain_as_list
 
@@ -438,7 +452,7 @@ class MapWidget(Widget):
                     chars_with_attrs += [c]
             return chars_with_attrs
 
-        if self.tui.game.world.maps[(0,0)].terrain == '':
+        if self.tui.game.world.map_.terrain == '':
             lines = []
             pad_y(lines)
             self.safe_write(''.join(lines))
@@ -448,7 +462,7 @@ class MapWidget(Widget):
         center = self.tui.game.world.player.position
         if self.tui.examiner_mode:
             center = self.tui.examiner_position
-        lines = self.tui.game.world.maps[(0,0)].\
+        lines = self.tui.game.world.map_.\
                 format_to_view(annotated_terrain, center, self.size)
         pad_or_cut_x(lines)
         pad_y(lines)
@@ -553,10 +567,9 @@ class TUI:
 
         def move_examiner(direction):
             start_pos = self.examiner_position
-            new_examine_pos = self.game.world.maps[(0,0)].\
-                              move(start_pos[0], direction)
+            new_examine_pos = self.game.world.map_.move(start_pos, direction)
             if new_examine_pos:
-                self.examiner_position[1] = new_examine_pos
+                self.examiner_position = new_examine_pos
             self.to_update['map'] = True
 
         def switch_to_pick_or_drop(target_widget):

@@ -10,9 +10,9 @@ def cmd_GET_GAMESTATE(game, connection_id):
     """Send game state to caller."""
     game.send_gamestate(connection_id)
 
-def cmd_MAP(game, big_yx, small_yx):
-    """Create new map of size small_yx at pos big_yx and only '?' cells."""
-    game.world.new_map(big_yx, small_yx)
+def cmd_MAP(game, map_pos, size):
+    """Create new map of size at position map_pos, and only '?' cells."""
+    game.world.new_map(map_pos, size)
 cmd_MAP.argtypes = 'yx_tuple yx_tuple:pos'
 
 def cmd_THING_TYPE(game, i, type_):
@@ -39,7 +39,7 @@ cmd_THING_TYPE.argtypes = 'int:nonneg string:thingtype'
 def cmd_THING_POS(game, i, big_yx, small_yx):
     t = game.world.get_thing(i)
     t.position = (big_yx, small_yx)
-cmd_THING_POS.argtypes = 'int:nonneg yx_tuple yx_tuple'
+cmd_THING_POS.argtypes = 'int:nonneg yx_tuple yx_tuple:nonneg'
 
 def cmd_THING_INVENTORY(game, id_, ids):
     t = game.world.get_thing(id_)

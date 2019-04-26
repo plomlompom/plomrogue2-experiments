@@ -185,19 +185,22 @@ class Game:
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
 
-        self.io.send('TURN ' + str(self.world.turn))
-        visible_map = self.world.player.get_visible_map()
-        self.io.send('MAP ' + stringify_yx([0,0]) + ' ' + stringify_yx(visible_map.size))
-        for y, line in visible_map.lines():
-            self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
-        visible_things, offset = self.world.player.get_visible_things()
-        for thing in visible_things:
+        def send_thing(offset, thing):
             offset_pos = (thing.position[1][0] - offset[0],
                           thing.position[1][1] - offset[1])
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s %s' % (thing.id_,
-                                                 stringify_yx(thing.position[0]),
-                                                 stringify_yx(offset_pos)))
+            self.io.send('THING_POS %s %s' % (thing.id_,
+                                              stringify_yx(offset_pos)))
+
+        self.io.send('TURN ' + str(self.world.turn))
+        visible_map = self.world.player.get_visible_map()
+        offset = self.world.player.get_surroundings_offset()
+        self.io.send('VISIBLE_MAP ' + stringify_yx(offset) + ' ' + stringify_yx(visible_map.size))
+        for y, line in visible_map.lines():
+            self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
+        visible_things = self.world.player.get_visible_things()
+        for thing in visible_things:
+            send_thing(offset, thing)
             if hasattr(thing, 'health'):
                 self.io.send('THING_HEALTH %s %s' % (thing.id_,
                                                      thing.health))
@@ -208,10 +211,7 @@ class Game:
             self.io.send('PLAYER_INVENTORY ,')
         for id_ in self.world.player.inventory:
             thing = self.world.get_thing(id_)
-            self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s %s' % (thing.id_,
-                                                 stringify_yx(thing.position[0]),
-                                                 stringify_yx(thing.position[1])))
+            send_thing(offset, thing)
         self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):
