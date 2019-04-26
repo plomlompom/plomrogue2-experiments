@@ -10,10 +10,10 @@ def cmd_GET_GAMESTATE(game, connection_id):
     """Send game state to caller."""
     game.send_gamestate(connection_id)
 
-def cmd_MAP(game, yx):
-    """Create new map of size yx and only '?' cells."""
-    game.world.new_map((0,0), yx)
-cmd_MAP.argtypes = 'yx_tuple:pos'
+def cmd_MAP(game, big_yx, small_yx):
+    """Create new map of size small_yx at pos big_yx and only '?' cells."""
+    game.world.new_map(big_yx, small_yx)
+cmd_MAP.argtypes = 'yx_tuple yx_tuple:pos'
 
 def cmd_THING_TYPE(game, i, type_):
     t_old = game.world.get_thing(i)
@@ -59,9 +59,9 @@ def cmd_GET_PICKABLE_ITEMS(game, connection_id):
     else:
         game.io.send('PICKABLE_ITEMS ,')
 
-def cmd_TERRAIN_LINE(game, y, terrain_line):
-    game.world.maps[(0,0)].set_line(y, terrain_line)
-cmd_TERRAIN_LINE.argtypes = 'int:nonneg string'
+def cmd_TERRAIN_LINE(game, big_yx, y, terrain_line):
+    game.world.maps[big_yx].set_line(y, terrain_line)
+cmd_TERRAIN_LINE.argtypes = 'yx_tuple int:nonneg string'
 
 def cmd_PLAYER_ID(game, id_):
     # TODO: test whether valid thing ID
@@ -90,9 +90,13 @@ def cmd_SAVE(game):
     save_file_name = game.io.game_file_name + '.save'
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
-        write(f, 'MAP ' + stringify_yx(game.world.maps[(0,0)].size))
-        for y, line in game.world.maps[(0,0)].lines():
-            write(f, 'TERRAIN_LINE %5s %s' % (y, quote(line)))
+        for map_pos in game.world.maps:
+            write(f, 'MAP ' + stringify_yx(map_pos) + ' ' +
+                  stringify_yx(game.world.maps[(0,0)].size))
+        for map_pos in game.world.maps:
+            for y, line in game.world.maps[map_pos].lines():
+                 write(f, 'TERRAIN_LINE %s %5s %s' % (stringify_yx(map_pos),
+                                                      y, quote(line)))
         for thing in game.world.things:
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
             write(f, 'THING_POS %s %s %s' % (thing.id_,

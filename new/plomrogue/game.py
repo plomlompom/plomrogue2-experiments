@@ -117,20 +117,22 @@ class World(WorldBase):
         self.turn = 0
         self.maps = {}
         self.new_map((0,0), yx)
-        #self.new_map((0,1), yx)
-        #self.new_map((1,1), yx)
-        #self.new_map((1,0), yx)
-        #self.new_map((1,-1), yx)
-        #self.new_map((0,-1), yx)
-        #self.new_map((-1,-1), yx)
-        #self.new_map((-1,0), yx)
-        #self.new_map((-1,1), yx)
-        for pos in self.maps[(0,0)]:
-            if 0 in pos or (yx[0] - 1) == pos[0] or (yx[1] - 1) == pos[1]:
-                self.maps[(0,0)][pos] = '#'
-                continue
-            self.maps[(0,0)][pos] = random.choice(('.', '.', '.', '.', 'x'))
-
+        self.new_map((0,1), yx)
+        self.new_map((1,1), yx)
+        self.new_map((1,0), yx)
+        self.new_map((1,-1), yx)
+        self.new_map((0,-1), yx)
+        self.new_map((-1,-1), yx)
+        self.new_map((-1,0), yx)
+        self.new_map((-1,1), yx)
+        for map_pos in self.maps:
+            map_ = self.maps[map_pos]
+            if (0,0) == map_pos:
+                for pos in map_:
+                    map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
+            else:
+                for pos in map_:
+                    map_[pos] = '~'
         player = add_thing_at_random('human')
         self.player_id = player.id_
         add_thing_at_random('monster')
@@ -185,7 +187,7 @@ class Game:
 
         self.io.send('TURN ' + str(self.world.turn))
         visible_map = self.world.player.get_visible_map()
-        self.io.send('MAP ' + stringify_yx(visible_map.size))
+        self.io.send('MAP ' + stringify_yx([0,0]) + ' ' + stringify_yx(visible_map.size))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things, offset = self.world.player.get_visible_things()

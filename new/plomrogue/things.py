@@ -45,7 +45,7 @@ class ThingAnimate(Thing):
         super().__init__(*args, **kwargs)
         self.set_task('WAIT')
         self._last_task_result = None
-        self._radius = 16
+        self._radius = 8
         self.unset_surroundings()
 
     def move_on_dijkstra_map(self, own_pos, targets):
@@ -202,24 +202,40 @@ class ThingAnimate(Thing):
     def get_surrounding_map(self):
         if self._surrounding_map is not None:
             return self._surrounding_map
-        offset = self.get_surroundings_offset()
+
+        def pan_and_scan(size_of_axis, pos, offset):
+            big_pos = 0
+            small_pos = pos + offset
+            if small_pos < 0:
+                big_pos = -1
+                small_pos = size_of_axis + small_pos
+            elif small_pos >= size_of_axis:
+                big_pos = 1
+                small_pos = small_pos - size_of_axis
+            return big_pos, small_pos
+
         add_line = self.must_fix_indentation()
         self._surrounding_map = self.world.game.\
                                 map_type(size=(self._radius*2+1+int(add_line),
                                                self._radius*2+1))
+        size = self.world.maps[(0,0)].size
+        offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
-            offset_pos = (pos[0] + offset[0], pos[1] + offset[1])
-            if offset_pos[0] >= 0 and \
-               offset_pos[0] < self.world.maps[(0,0)].size[0] and \
-               offset_pos[1] >= 0 and \
-               offset_pos[1] < self.world.maps[(0,0)].size[1]:
-                self._surrounding_map[pos] = self.world.maps[(0,0)][offset_pos]
+            big_y, small_y = pan_and_scan(size[0], pos[0], offset[0])
+            big_x, small_x = pan_and_scan(size[1], pos[1], offset[1])
+            big_yx = (big_y, big_x)
+            small_yx = (small_y, small_x)
+            self._surrounding_map[pos] = self.world.maps[big_yx][small_yx]
         return self._surrounding_map
 
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        m = self.get_surrounding_map()
+        surrounding_map = self.get_surrounding_map()
+        m = surrounding_map.new_from_shape(' ')
+        for pos in surrounding_map:
+            if surrounding_map[pos] in {'.', '~'}:
+                m[pos] = '.'
         offset = self.get_surroundings_offset()
         fov_center = (self.position[1][0] - offset[0],
                       self.position[1][1] - offset[1])
@@ -235,16 +251,28 @@ class ThingAnimate(Thing):
         return m
 
     def get_visible_things(self):
+
+        def calc_pos_in_fov(big_pos, small_pos, offset, size_of_axis):
+            pos = small_pos - offset
+            if big_pos == -1:
+                pos = small_pos - size_of_axis - offset
+            elif big_pos == 1:
+                pos = small_pos + size_of_axis - offset
+            return pos
+
         stencil = self.get_stencil()
         offset = self.get_surroundings_offset()
         visible_things = []
+        size = self.world.maps[(0,0)].size
+        fov_size = self.get_surrounding_map().size
         for thing in self.world.things:
-            if abs(thing.position[1][0] - self.position[1][0]) > self._radius or\
-               abs(thing.position[1][1] - self.position[1][1]) > self._radius:
+            big_pos = thing.position[0]
+            small_pos = thing.position[1]
+            pos_y = calc_pos_in_fov(big_pos[0], small_pos[0], offset[0], size[0])
+            pos_x = calc_pos_in_fov(big_pos[1], small_pos[1], offset[1], size[1])
+            if pos_y < 0 or pos_x < 0 or pos_y >= fov_size[0] or pos_x >= fov_size[1]:
                 continue
-            offset_pos = (thing.position[1][0] - offset[0],
-                          thing.position[1][1] - offset[1])
-            if (not thing.in_inventory) and stencil[offset_pos] == '.':
+            if (not thing.in_inventory) and stencil[(pos_y, pos_x)] == '.':
                 visible_things += [thing]
         return visible_things, offset
 
