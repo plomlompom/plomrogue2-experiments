@@ -56,6 +56,7 @@ def cmd_THING_INVENTORY(game, id_, ids):
     for id_ in ids:
         t = game.world.get_thing(id_)
         t.in_inventory = True
+        t.position = carrier.position
 cmd_THING_INVENTORY.argtypes = 'int:nonneg seq:int:nonneg'
 
 def cmd_THING_HEALTH(game, id_, health):
