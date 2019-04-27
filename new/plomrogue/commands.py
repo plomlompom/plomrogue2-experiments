@@ -36,6 +36,7 @@ def cmd_THING_TYPE(game, i, type_):
     #        continue
     #    setattr(t_new, attr_name, attr_old)
     t_new.position = t_old.position
+    t_new.in_inventory = t_old.in_inventory
     t_old_index = game.world.things.index(t_old)
     game.world.things[t_old_index] = t_new
 cmd_THING_TYPE.argtypes = 'int:nonneg string:thingtype'
@@ -46,8 +47,11 @@ def cmd_THING_POS(game, i, big_yx, small_yx):
 cmd_THING_POS.argtypes = 'int:nonneg yx_tuple yx_tuple:nonneg'
 
 def cmd_THING_INVENTORY(game, id_, ids):
-    t = game.world.get_thing(id_)
-    t.inventory = ids  # TODO: test whether valid IDs
+    carrier = game.world.get_thing(id_)
+    carrier.inventory = ids
+    for id_ in ids:
+        t = game.world.get_thing(id_)
+        t.in_inventory = True
 cmd_THING_INVENTORY.argtypes = 'int:nonneg seq:int:nonneg'
 
 def cmd_THING_HEALTH(game, id_, health):

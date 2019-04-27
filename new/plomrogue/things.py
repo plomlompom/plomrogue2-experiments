@@ -272,7 +272,8 @@ class ThingAnimate(Thing):
             small_pos = thing.position[1]
             pos_y = calc_pos_in_fov(big_pos[0], small_pos[0], offset[0], size[0])
             pos_x = calc_pos_in_fov(big_pos[1], small_pos[1], offset[1], size[1])
-            if pos_y < 0 or pos_x < 0 or pos_y >= fov_size[0] or pos_x >= fov_size[1]:
+            if pos_y < 0 or pos_x < 0 or\
+               pos_y >= fov_size[0] or pos_x >= fov_size[1]:
                 continue
             if (not thing.in_inventory) and stencil[(pos_y, pos_x)] == '.':
                 visible_things += [thing]
