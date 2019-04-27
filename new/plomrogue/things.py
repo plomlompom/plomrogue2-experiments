@@ -8,11 +8,11 @@ class ThingBase:
 
     def __init__(self, world, id_=None, position=(YX(0,0), YX(0,0))):
         self.world = world
-        self.position = position
         if id_ is None:
             self.id_ = self.world.new_thing_id()
         else:
             self.id_ = id_
+        self.position = position
 
     @property
     def position(self):
@@ -42,6 +42,7 @@ class Thing(ThingBase):
 
     def __init__(self, *args, **kwargs):
         self.inventory = []
+        self._radius = 8
         super().__init__(*args, **kwargs)
 
     def proceed(self):
@@ -52,6 +53,28 @@ class Thing(ThingBase):
         for t_id in self.inventory:
             t = self.world.get_thing(t_id)
             t.position = self.position
+        if not self.id_ == self.world.player_id:
+            return
+        edge_left = self.position[1].x - self._radius
+        edge_right = self.position[1].x + self._radius
+        edge_up = self.position[1].y - self._radius
+        edge_down = self.position[1].y + self._radius
+        if edge_left < 0:
+            self.world.get_map(self.position[0] - YX(1,-1))
+            self.world.get_map(self.position[0] - YX(0,-1))
+            self.world.get_map(self.position[0] - YX(-1,-1))
+        if edge_right >= self.world.map_size.x:
+            self.world.get_map(self.position[0] + YX(1,1))
+            self.world.get_map(self.position[0] + YX(0,1))
+            self.world.get_map(self.position[0] + YX(-1,1))
+        if edge_up < 0:
+            self.world.get_map(self.position[0] - YX(-1,1))
+            self.world.get_map(self.position[0] - YX(-1,0))
+            self.world.get_map(self.position[0] - YX(-1,-1))
+        if edge_down >= self.world.map_size.y:
+            self.world.get_map(self.position[0] + YX(1,1))
+            self.world.get_map(self.position[0] + YX(1,0))
+            self.world.get_map(self.position[0] + YX(1,-1))
 
 
 
@@ -72,7 +95,6 @@ class ThingAnimate(Thing):
         super().__init__(*args, **kwargs)
         self.set_task('WAIT')
         self._last_task_result = None
-        self._radius = 8
         self.unset_surroundings()
 
     def move_on_dijkstra_map(self, own_pos, targets):
@@ -250,7 +272,10 @@ class ThingAnimate(Thing):
             big_x, small_x = pan_and_scan(size.x, pos.x, offset.x)
             big_yx = YX(big_y, big_x)
             small_yx = YX(small_y, small_x)
-            self._surrounding_map[pos] = self.world.maps[big_yx][small_yx]
+            map_ = self.world.get_map(big_yx, False)
+            if map_ is None:
+                map_ = self.world.game.map_type(size=self.world.map_size)
+            self._surrounding_map[pos] = map_[small_yx]
         return self._surrounding_map
 
     def get_stencil(self):

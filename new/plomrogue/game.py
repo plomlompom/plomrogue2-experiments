@@ -79,10 +79,16 @@ class World(WorldBase):
             return 0
         return self.things[-1].id_ + 1
 
-    def ensure_map(self, map_pos):
-        if map_pos in self.maps and self.maps[map_pos].size == self.map_size:
-            return
-        self.maps[map_pos] = self.game.map_type(self.map_size)
+    def get_map(self, map_pos, create_unfound=True):
+        if not (map_pos in self.maps and
+                self.maps[map_pos].size == self.map_size):
+            if create_unfound:
+                self.maps[map_pos] = self.game.map_type(self.map_size)
+                for pos in self.maps[map_pos]:
+                    self.maps[map_pos][pos] = '~'
+            else:
+                return None
+        return self.maps[map_pos]
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -138,23 +144,9 @@ class World(WorldBase):
         self.turn = 0
         self.maps = {}
         self.map_size = yx
-        self.ensure_map(YX(0,0))
-        self.ensure_map(YX(0,1))
-        self.ensure_map(YX(1,1))
-        self.ensure_map(YX(1,0))
-        self.ensure_map(YX(1,-1))
-        self.ensure_map(YX(0,-1))
-        self.ensure_map(YX(-1,-1))
-        self.ensure_map(YX(-1,0))
-        self.ensure_map(YX(-1,1))
-        for map_pos in self.maps:
-            map_ = self.maps[map_pos]
-            if YX(0,0) == map_pos:
-                for pos in map_:
-                    map_[pos] = self.rand.choice(('.', '.', '.', '.', 'x'))
-            else:
-                for pos in map_:
-                    map_[pos] = '~'
+        map_ = self.get_map(YX(0,0))
+        for pos in map_:
+            map_[pos] = self.rand.choice(('.', '.', '.', '.', 'x'))
         player = add_thing_at_random('human')
         self.player_id = player.id_
         add_thing_at_random('monster')
