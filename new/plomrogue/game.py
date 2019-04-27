@@ -199,7 +199,7 @@ class Game:
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':
-            return self.world.maps[YX(0,0)].get_directions()
+            return self.map_type().get_directions()
         elif string_option_type == 'thingtype':
             return list(self.thing_types.keys())
         return None
