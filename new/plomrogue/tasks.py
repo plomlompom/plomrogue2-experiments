@@ -52,9 +52,6 @@ class Task_MOVE(Task):
     def do(self):
         self.thing.position = (0,0), self.thing.world.maps[(0,0)].\
                                      move(self.thing.position[1], self.args[0])
-        for id_ in self.thing.inventory:
-            t = self.thing.world.get_thing(id_)
-            t.position = self.thing.position
 
 
 

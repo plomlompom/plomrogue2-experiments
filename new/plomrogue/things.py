@@ -13,6 +13,26 @@ class ThingBase:
         else:
             self.id_ = id_
 
+    @property
+    def position(self):
+        return self._position
+
+    def _position_set(self, pos):
+        """Set self._position to pos.
+
+        We use this setter as core to the @position.setter property
+        method due to property setter subclassing not yet working
+        properly, see <https://bugs.python.org/issue14965>. We will
+        therefore super() _position_set instead of @position.setter in
+        subclasses.
+
+        """
+        self._position = pos
+
+    @position.setter
+    def position(self, pos):
+        self._position_set(pos)
+
 
 
 class Thing(ThingBase):
@@ -20,11 +40,17 @@ class Thing(ThingBase):
     in_inventory = False
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self.inventory = []
+        super().__init__(*args, **kwargs)
 
     def proceed(self):
         pass
+
+    def _position_set(self, pos):
+        super()._position_set(pos)
+        for t_id in self.inventory:
+            t = self.world.get_thing(t_id)
+            t.position = self.position
 
 
 
