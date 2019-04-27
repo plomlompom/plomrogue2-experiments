@@ -19,8 +19,8 @@ def cmd_MAP_SIZE(game, size):
 cmd_MAP_SIZE.argtypes = 'yx_tuple:pos'
 
 def cmd_MAP(game, map_pos):
-    """Create new map at position map_pos and only of '?' cells."""
-    game.world.new_map(map_pos)
+    """Ensure (possibly empty/'?'-filled) map at position map_pos."""
+    game.world.ensure_map(map_pos)
 cmd_MAP.argtypes = 'yx_tuple'
 
 def cmd_THING_TYPE(game, i, type_):

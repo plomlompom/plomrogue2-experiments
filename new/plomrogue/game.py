@@ -79,7 +79,9 @@ class World(WorldBase):
             return 0
         return self.things[-1].id_ + 1
 
-    def new_map(self, map_pos):
+    def ensure_map(self, map_pos):
+        if map_pos in self.maps and self.maps[map_pos].size == self.map_size:
+            return
         self.maps[map_pos] = self.game.map_type(self.map_size)
 
     def proceed_to_next_player_turn(self):
@@ -136,15 +138,15 @@ class World(WorldBase):
         self.turn = 0
         self.maps = {}
         self.map_size = yx
-        self.new_map(YX(0,0))
-        self.new_map(YX(0,1))
-        self.new_map(YX(1,1))
-        self.new_map(YX(1,0))
-        self.new_map(YX(1,-1))
-        self.new_map(YX(0,-1))
-        self.new_map(YX(-1,-1))
-        self.new_map(YX(-1,0))
-        self.new_map(YX(-1,1))
+        self.ensure_map(YX(0,0))
+        self.ensure_map(YX(0,1))
+        self.ensure_map(YX(1,1))
+        self.ensure_map(YX(1,0))
+        self.ensure_map(YX(1,-1))
+        self.ensure_map(YX(0,-1))
+        self.ensure_map(YX(-1,-1))
+        self.ensure_map(YX(-1,0))
+        self.ensure_map(YX(-1,1))
         for map_pos in self.maps:
             map_ = self.maps[map_pos]
             if YX(0,0) == map_pos:
