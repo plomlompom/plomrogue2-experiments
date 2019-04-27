@@ -220,7 +220,7 @@ class ThingAnimate(Thing):
         self._surrounding_map = self.world.game.\
                                 map_type(size=(self._radius*2+1+int(add_line),
                                                self._radius*2+1))
-        size = self.world.maps[(0,0)].size
+        size = self.world.map_size
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
             big_y, small_y = pan_and_scan(size[0], pos[0], offset[0])
@@ -265,7 +265,7 @@ class ThingAnimate(Thing):
         stencil = self.get_stencil()
         offset = self.get_surroundings_offset()
         visible_things = []
-        size = self.world.maps[(0,0)].size
+        size = self.world.map_size
         fov_size = self.get_surrounding_map().size
         for thing in self.world.things:
             big_pos = thing.position[0]

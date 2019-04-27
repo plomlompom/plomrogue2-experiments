@@ -5,7 +5,7 @@ from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
                                 cmd_MAP, cmd_MAP, cmd_THING_TYPE,
                                 cmd_THING_POS, cmd_THING_INVENTORY,
                                 cmd_THING_HEALTH, cmd_SEED,
-                                cmd_GET_PICKABLE_ITEMS,
+                                cmd_GET_PICKABLE_ITEMS, cmd_MAP_SIZE,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID,
                                 cmd_TURN, cmd_SWITCH_PLAYER, cmd_SAVE)
 from plomrogue.mapping import MapHex
@@ -67,6 +67,7 @@ class World(WorldBase):
         self.player_id = 0
         self.player_is_alive = True
         self.maps = {}
+        self.map_size = (1,1)
         self.rand = PRNGod(0)
 
     @property
@@ -78,8 +79,8 @@ class World(WorldBase):
             return 0
         return self.things[-1].id_ + 1
 
-    def new_map(self, map_pos, size):
-        self.maps[map_pos] = self.game.map_type(size)
+    def new_map(self, map_pos):
+        self.maps[map_pos] = self.game.map_type(self.map_size)
 
     def proceed_to_next_player_turn(self):
         """Run game world turns until player can decide their next step.
@@ -134,15 +135,16 @@ class World(WorldBase):
         self.rand.seed(seed)
         self.turn = 0
         self.maps = {}
-        self.new_map((0,0), yx)
-        self.new_map((0,1), yx)
-        self.new_map((1,1), yx)
-        self.new_map((1,0), yx)
-        self.new_map((1,-1), yx)
-        self.new_map((0,-1), yx)
-        self.new_map((-1,-1), yx)
-        self.new_map((-1,0), yx)
-        self.new_map((-1,1), yx)
+        self.map_size = yx
+        self.new_map((0,0))
+        self.new_map((0,1))
+        self.new_map((1,1))
+        self.new_map((1,0))
+        self.new_map((1,-1))
+        self.new_map((0,-1))
+        self.new_map((-1,-1))
+        self.new_map((-1,0))
+        self.new_map((-1,1))
         for map_pos in self.maps:
             map_ = self.maps[map_pos]
             if (0,0) == map_pos:
@@ -176,6 +178,7 @@ class Game:
         self.commands = {'GEN_WORLD': cmd_GEN_WORLD,
                          'GET_GAMESTATE': cmd_GET_GAMESTATE,
                          'SEED': cmd_SEED,
+                         'MAP_SIZE': cmd_MAP_SIZE,
                          'MAP': cmd_MAP,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS,
@@ -214,7 +217,8 @@ class Game:
         self.io.send('TURN ' + str(self.world.turn))
         visible_map = self.world.player.get_visible_map()
         offset = self.world.player.get_surroundings_offset()
-        self.io.send('VISIBLE_MAP ' + stringify_yx(offset) + ' ' + stringify_yx(visible_map.size))
+        self.io.send('VISIBLE_MAP ' + stringify_yx(offset) + ' '
+                     + stringify_yx(visible_map.size))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things = self.world.player.get_visible_things()

@@ -14,10 +14,14 @@ def cmd_SEED(game, seed):
     game.world.rand.prngod_seed = seed
 cmd_SEED.argtypes = 'int:nonneg'
 
-def cmd_MAP(game, map_pos, size):
-    """Create new map of size at position map_pos, and only '?' cells."""
-    game.world.new_map(map_pos, size)
-cmd_MAP.argtypes = 'yx_tuple yx_tuple:pos'
+def cmd_MAP_SIZE(game, size):
+    game.world.map_size = size
+cmd_MAP_SIZE.argtypes = 'yx_tuple:pos'
+
+def cmd_MAP(game, map_pos):
+    """Create new map at position map_pos and only of '?' cells."""
+    game.world.new_map(map_pos)
+cmd_MAP.argtypes = 'yx_tuple'
 
 def cmd_THING_TYPE(game, i, type_):
     t_old = game.world.get_thing(i)
@@ -99,9 +103,9 @@ def cmd_SAVE(game):
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
         write(f, 'SEED %s' % game.world.rand.prngod_seed)
+        write(f, 'MAP_SIZE ' + stringify_yx(game.world.map_size))
         for map_pos in game.world.maps:
-            write(f, 'MAP ' + stringify_yx(map_pos) + ' ' +
-                  stringify_yx(game.world.maps[(0,0)].size))
+            write(f, 'MAP ' + stringify_yx(map_pos))
         for map_pos in game.world.maps:
             for y, line in game.world.maps[map_pos].lines():
                  write(f, 'TERRAIN_LINE %s %5s %s' % (stringify_yx(map_pos),
