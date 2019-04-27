@@ -8,10 +8,10 @@ from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
                                 cmd_GET_PICKABLE_ITEMS, cmd_MAP_SIZE,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID,
                                 cmd_TURN, cmd_SWITCH_PLAYER, cmd_SAVE)
-from plomrogue.mapping import MapHex
+from plomrogue.mapping import MapHex, YX
 from plomrogue.parser import Parser
 from plomrogue.io import GameIO
-from plomrogue.misc import quote, stringify_yx
+from plomrogue.misc import quote
 from plomrogue.things import Thing, ThingMonster, ThingHuman, ThingFood
 import random
 
@@ -67,7 +67,7 @@ class World(WorldBase):
         self.player_id = 0
         self.player_is_alive = True
         self.maps = {}
-        self.map_size = (1,1)
+        self.map_size = YX(1,1)
         self.rand = PRNGod(0)
 
     @property
@@ -101,11 +101,11 @@ class World(WorldBase):
             for thing in self.things[player_i+1:]:
                 thing.proceed()
             self.turn += 1
-            for pos in self.maps[(0,0)]:
-                if self.maps[(0,0)][pos] == '.' and \
-                   len(self.things_at_pos(((0,0), pos))) == 0 and \
+            for pos in self.maps[YX(0,0)]:
+                if self.maps[YX(0,0)][pos] == '.' and \
+                   len(self.things_at_pos((YX(0,0), pos))) == 0 and \
                    self.rand.random() > 0.999:
-                    self.add_thing_at('food', ((0,0), pos))
+                    self.add_thing_at('food', (YX(0,0), pos))
             for thing in self.things[:player_i]:
                 thing.proceed()
             self.player.proceed(is_AI=False)
@@ -122,9 +122,9 @@ class World(WorldBase):
 
         def add_thing_at_random(type_):
             while True:
-                new_pos = ((0,0),
-                           (self.rand.randint(0, yx[0] -1),
-                            self.rand.randint(0, yx[1] -1)))
+                new_pos = (YX(0,0),
+                           YX(self.rand.randint(0, yx.y - 1),
+                              self.rand.randint(0, yx.x - 1)))
                 if self.maps[new_pos[0]][new_pos[1]] != '.':
                     continue
                 if len(self.things_at_pos(new_pos)) > 0:
@@ -136,18 +136,18 @@ class World(WorldBase):
         self.turn = 0
         self.maps = {}
         self.map_size = yx
-        self.new_map((0,0))
-        self.new_map((0,1))
-        self.new_map((1,1))
-        self.new_map((1,0))
-        self.new_map((1,-1))
-        self.new_map((0,-1))
-        self.new_map((-1,-1))
-        self.new_map((-1,0))
-        self.new_map((-1,1))
+        self.new_map(YX(0,0))
+        self.new_map(YX(0,1))
+        self.new_map(YX(1,1))
+        self.new_map(YX(1,0))
+        self.new_map(YX(1,-1))
+        self.new_map(YX(0,-1))
+        self.new_map(YX(-1,-1))
+        self.new_map(YX(-1,0))
+        self.new_map(YX(-1,1))
         for map_pos in self.maps:
             map_ = self.maps[map_pos]
-            if (0,0) == map_pos:
+            if YX(0,0) == map_pos:
                 for pos in map_:
                     map_[pos] = self.rand.choice(('.', '.', '.', '.', 'x'))
             else:
@@ -199,7 +199,7 @@ class Game:
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':
-            return self.world.maps[(0,0)].get_directions()
+            return self.world.maps[YX(0,0)].get_directions()
         elif string_option_type == 'thingtype':
             return list(self.thing_types.keys())
         return None
@@ -208,17 +208,14 @@ class Game:
         """Send out game state data relevant to clients."""
 
         def send_thing(offset, thing):
-            offset_pos = (thing.position[1][0] - offset[0],
-                          thing.position[1][1] - offset[1])
+            offset_pos = (thing.position[1] - offset)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s' % (thing.id_,
-                                              stringify_yx(offset_pos)))
+            self.io.send('THING_POS %s %s' % (thing.id_, offset_pos))
 
         self.io.send('TURN ' + str(self.world.turn))
         visible_map = self.world.player.get_visible_map()
         offset = self.world.player.get_surroundings_offset()
-        self.io.send('VISIBLE_MAP ' + stringify_yx(offset) + ' '
-                     + stringify_yx(visible_map.size))
+        self.io.send('VISIBLE_MAP %s %s' % (offset, visible_map.size))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things = self.world.player.get_visible_things()

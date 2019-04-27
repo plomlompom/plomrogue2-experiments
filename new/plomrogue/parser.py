@@ -1,5 +1,6 @@
 import unittest
 from plomrogue.errors import ArgError
+from plomrogue.mapping import YX
 
 
 class Parser:
@@ -88,7 +89,7 @@ class Parser:
             raise ArgError('Wrong number of yx-tuple arguments.')
         y = get_axis_position_from_argument('Y', tokens[0])
         x = get_axis_position_from_argument('X', tokens[1])
-        return (y, x)
+        return YX(y, x)
 
     def argsparse(self, signature, args_tokens):
         """Parse into / return args_tokens as args defined by signature.

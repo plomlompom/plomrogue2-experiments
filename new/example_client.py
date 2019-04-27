@@ -5,7 +5,7 @@ import threading
 from plomrogue.parser import ArgError, Parser
 from plomrogue.commands import cmd_PLAYER_ID, cmd_THING_HEALTH
 from plomrogue.game import Game, WorldBase
-from plomrogue.mapping import MapHex
+from plomrogue.mapping import MapHex, YX
 from plomrogue.io import PlomSocket
 from plomrogue.things import ThingBase
 import types
@@ -45,7 +45,7 @@ class ClientMap(MapHex):
                 else:
                     map_view_chars += [cell[0], cell[1]]
                 x += 1
-                if x == self.size[1]:
+                if x == self.size.x:
                     map_view_chars += ['\n']
                     x = 0
                     y += 1
@@ -62,9 +62,9 @@ class ClientMap(MapHex):
         else:
             for i in range(len(map_lines)):
                 map_lines[i] = '0' + map_lines[i]
-        self.y_cut(map_lines, center[0], size[0])
-        map_width = self.size[1] * 2 + 1
-        self.x_cut(map_lines, center[1] * 2, size[1], map_width)
+        self.y_cut(map_lines, center.y, size.y)
+        map_width = self.size.x * 2 + 1
+        self.x_cut(map_lines, center.x * 2, size.x, map_width)
         return map_lines
 
 
@@ -78,7 +78,7 @@ class World(WorldBase):
         """
         super().__init__(*args, **kwargs)
         self.map_ = ClientMap()
-        self.offset = (0,0)
+        self.offset = YX(0,0)
         self.player_inventory = []
         self.player_id = 0
         self.pickable_items = []
@@ -233,7 +233,7 @@ class Widget:
         self.check_updates = check_updates
         self.tui = tui
         self.start = start
-        self.win = curses.newwin(1, 1, self.start[0], self.start[1])
+        self.win = curses.newwin(1, 1, self.start.y, self.start.x)
         self.size_def = size  # store for re-calling .size on SIGWINCH
         self.size = size
         self.do_update = True
@@ -242,20 +242,22 @@ class Widget:
 
     @property
     def size(self):
-        return self.win.getmaxyx()
+        return YX(*self.win.getmaxyx())
 
     @size.setter
     def size(self, size):
         """Set window size. Size be y,x tuple. If y or x None, use legal max."""
         n_lines, n_cols = size
+        getmaxyx = YX(*self.tui.stdscr.getmaxyx())
         if n_lines is None:
-            n_lines = self.tui.stdscr.getmaxyx()[0] - self.start[0]
+            n_lines = getmaxyx.y - self.start.y
         if n_cols is None:
-            n_cols = self.tui.stdscr.getmaxyx()[1] - self.start[1]
+            n_cols = getmaxyx.x - self.start.x
         self.win.resize(n_lines, n_cols)
 
     def __len__(self):
-        return self.win.getmaxyx()[0] * self.win.getmaxyx()[1]
+        getmaxyx = YX(*self.win.getmaxyx())
+        return getmaxyx.y * getmaxyx.x
 
     def safe_write(self, foo):
 
@@ -280,9 +282,9 @@ class Widget:
         else:  # workaround to <https://stackoverflow.com/q/7063128>
             cut = chars_with_attrs[:len(self) - 1]
             last_char_with_attr = chars_with_attrs[len(self) - 1]
-            self.win.addstr(self.size[0] - 1, self.size[1] - 2,
+            self.win.addstr(self.size.y - 1, self.size.x - 2,
                             last_char_with_attr[0], last_char_with_attr[1])
-            self.win.insstr(self.size[0] - 1, self.size[1] - 2, ' ')
+            self.win.insstr(self.size.y - 1, self.size.x - 2, ' ')
             self.win.move(0, 0)
             for char_with_attr in cut:
                 self.win.addstr(char_with_attr[0], char_with_attr[1])
@@ -315,7 +317,7 @@ class TextLinesWidget(Widget):
 
     def draw(self):
         lines = self.get_text_lines()
-        line_width = self.size[1]
+        line_width = self.size.x
         to_join = []
         for line in lines:
             to_pad = line_width - (len(line) % line_width)
@@ -353,10 +355,11 @@ class PopUpWidget(Widget):
         size = (1, len(self.tui.popup_text))
         self.size = size
         self.size_def = size
-        offset_y = int((self.tui.stdscr.getmaxyx()[0] / 2) - (size[0] / 2))
-        offset_x = int((self.tui.stdscr.getmaxyx()[1] / 2) - (size[1] / 2))
-        self.start = (offset_y, offset_x)
-        self.win.mvwin(self.start[0], self.start[1])
+        getmaxyx = YX(*self.tui.stdscr.getmaxyx())
+        offset_y = int(getmaxyx.y / 2 - size.y / 2)
+        offset_x = int(getmaxyx.x / 2 - size.x / 2)
+        self.start = YX(offset_y, offset_x)
+        self.win.mvwin(self.start.y, self.start.x)
 
 
 class ItemsSelectorWidget(Widget):
@@ -385,7 +388,7 @@ class ItemsSelectorWidget(Widget):
             t = self.tui.game.world.get_thing(id_)
             lines += ['%s %s' % (pointer, t.type_)]
             counter += 1
-        line_width = self.size[1]
+        line_width = self.size.x
         to_join = []
         for line in lines:
             to_pad = line_width - (len(line) % line_width)
@@ -421,7 +424,7 @@ class MapWidget(Widget):
             return terrain_as_list
 
         def pad_or_cut_x(lines):
-            line_width = self.size[1]
+            line_width = self.size.x
             for y in range(len(lines)):
                 line = lines[y]
                 if line_width > len(line):
@@ -431,9 +434,9 @@ class MapWidget(Widget):
                     lines[y] = line[:line_width]
 
         def pad_y(lines):
-            if len(lines) < self.size[0]:
-                to_pad = self.size[0] - len(lines)
-                lines += to_pad * ['0' * self.size[1]]
+            if len(lines) < self.size.y:
+                to_pad = self.size.y - len(lines)
+                lines += to_pad * ['0' * self.size.x]
 
         def lines_to_colored_chars(lines):
             chars_with_attrs = []
@@ -503,7 +506,7 @@ class TUI:
         self.parser = Parser(self.game)
         self.to_update = {}
         self.item_pointer = 0
-        self.examiner_position = ((0,0), (0, 0))
+        self.examiner_position = (YX(0,0), YX(0, 0))
         self.examiner_mode = False
         self.popup_text = 'Hi bob'
         self.to_send = []
@@ -654,32 +657,31 @@ class TUI:
         init_colors()
 
         # With screen initialized, set up widgets with their curses windows.
-        edit_widget = TextLineWidget('SEND:', self, (0, 0), (1, 20))
-        edit_line_widget = EditWidget(self, (0, 6), (1, 14), ['edit'])
+        edit_widget = TextLineWidget('SEND:', self, YX(0, 0), YX(1, 20))
+        edit_line_widget = EditWidget(self, YX(0, 6), YX(1, 14), ['edit'])
         edit_widget.children += [edit_line_widget]
-        turn_widget = TextLineWidget('TURN:', self, (2, 0), (1, 20))
-        turn_widget.children += [TurnWidget(self, (2, 6), (1, 14), ['turn'])]
-        health_widget = TextLineWidget('HEALTH:', self, (3, 0), (1, 20))
-        health_widget.children += [HealthWidget(self, (3, 8), (1, 12), ['turn'])]
-        log_widget = LogWidget(self, (5, 0), (None, 20), ['log'])
-        descriptor_widget = DescriptorWidget(self, (5, 0), (None, 20),
+        turn_widget = TextLineWidget('TURN:', self, YX(2, 0), YX(1, 20))
+        turn_widget.children += [TurnWidget(self, YX(2, 6), YX(1, 14), ['turn'])]
+        health_widget = TextLineWidget('HEALTH:', self, YX(3, 0), YX(1, 20))
+        health_widget.children += [HealthWidget(self, YX(3, 8), YX(1, 12), ['turn'])]
+        log_widget = LogWidget(self, YX(5, 0), YX(None, 20), ['log'])
+        descriptor_widget = DescriptorWidget(self, YX(5, 0), YX(None, 20),
                                              ['map'], False)
-        map_widget = MapWidget(self, (0, 21), (None, None), ['map'])
+        map_widget = MapWidget(self, YX(0, 21), YX(None, None), ['map'])
         inventory_widget = ItemsSelectorWidget('INVENTORY:',
                                                self.game.world.player_inventory,
-                                               self, (0, 21), (None,
-                                                               None), ['inventory'],
-                                               False)
+                                               self, YX(0, 21), YX(None, None),
+                                               ['inventory'], False)
         pickable_items_widget = ItemsSelectorWidget('PICKABLE:',
                                                     self.game.world.pickable_items,
-                                                    self, (0, 21),
-                                                    (None, None),
+                                                    self, YX(0, 21),
+                                                    YX(None, None),
                                                     ['pickable_items'],
                                                     False)
         top_widgets = [edit_widget, turn_widget, health_widget, log_widget,
                        descriptor_widget, map_widget, inventory_widget,
                        pickable_items_widget]
-        popup_widget = PopUpWidget(self, (0, 0), (1, 1), visible=False)
+        popup_widget = PopUpWidget(self, YX(0, 0), YX(1, 1), visible=False)
 
         # Ensure initial window state before loop starts.
         for w in top_widgets:

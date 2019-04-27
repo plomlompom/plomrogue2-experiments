@@ -1,10 +1,24 @@
 from plomrogue.errors import ArgError
+import collections
+
+
+
+class YX(collections.namedtuple('YX', ('y', 'x'))):
+
+    def __add__(self, other):
+        return YX(self.y + other.y, self.x + other.x)
+
+    def __sub__(self, other):
+        return YX(self.y - other.y, self.x - other.x)
+
+    def __str__(self):
+        return 'Y:%s,X:%s' % (self.y, self.x)
 
 
 
 class Map:
 
-    def __init__(self, size=(0, 0)):
+    def __init__(self, size=YX(0, 0)):
         self.size = size
         self.terrain = '?'*self.size_i
 
@@ -20,17 +34,17 @@ class Map:
 
     def __iter__(self):
         """Iterate over YX position coordinates."""
-        for y in range(self.size[0]):
-            for x in range(self.size[1]):
-                yield (y, x)
+        for y in range(self.size.y):
+            for x in range(self.size.x):
+                yield YX(y, x)
 
     @property
     def size_i(self):
-        return self.size[0] * self.size[1]
+        return self.size.y * self.size.x
 
     def set_line(self, y, line):
-        height_map = self.size[0]
-        width_map = self.size[1]
+        height_map = self.size.y
+        width_map = self.size.x
         if y >= height_map:
             raise ArgError('too large row number %s' % y)
         width_line = len(line)
@@ -40,11 +54,11 @@ class Map:
                        self.terrain[(y + 1) * width_map:]
 
     def get_position_index(self, yx):
-        return yx[0] * self.size[1] + yx[1]
+        return yx.y * self.size.x + yx.x
 
     def lines(self):
-        width = self.size[1]
-        for y in range(self.size[0]):
+        width = self.size.x
+        for y in range(self.size.y):
             yield (y, self.terrain[y * width:(y + 1) * width])
 
     def get_fov_map(self, yx):
@@ -59,7 +73,6 @@ class Map:
 
     def get_neighbors(self, pos):
         neighbors = {}
-        pos = tuple(pos)
         if not hasattr(self, 'neighbors_to'):
             self.neighbors_to = {}
         if pos in self.neighbors_to:
@@ -82,8 +95,8 @@ class Map:
     def move(self, start_pos, direction):
         mover = getattr(self, 'move_' + direction)
         new_pos = mover(start_pos)
-        if new_pos[0] < 0 or new_pos[1] < 0 or \
-                new_pos[0] >= self.size[0] or new_pos[1] >= self.size[1]:
+        if new_pos.y < 0 or new_pos.x < 0 or \
+                new_pos.y >= self.size.y or new_pos.x >= self.size.x:
             return None
         return new_pos
 
@@ -92,20 +105,20 @@ class Map:
 class MapWithLeftRightMoves(Map):
 
     def move_LEFT(self, start_pos):
-        return (start_pos[0], start_pos[1] - 1)
+        return YX(start_pos.y, start_pos.x - 1)
 
     def move_RIGHT(self, start_pos):
-        return (start_pos[0], start_pos[1] + 1)
+        return YX(start_pos.y, start_pos.x + 1)
 
 
 
 class MapSquare(MapWithLeftRightMoves):
 
     def move_UP(self, start_pos):
-        return (start_pos[0] - 1, start_pos[1])
+        return YX(start_pos.y - 1, start_pos.x)
 
     def move_DOWN(self, start_pos):
-        return (start_pos[0] + 1, start_pos[1])
+        return YX(start_pos.y + 1, start_pos.x)
 
 
 
@@ -116,28 +129,28 @@ class MapHex(MapWithLeftRightMoves):
         self.fov_map_type = FovMapHex
 
     def move_UPLEFT(self, start_pos):
-        if start_pos[0] % 2 == 1:
-            return (start_pos[0] - 1, start_pos[1] - 1)
+        if start_pos.y % 2 == 1:
+            return YX(start_pos.y - 1, start_pos.x - 1)
         else:
-            return (start_pos[0] - 1, start_pos[1])
+            return YX(start_pos.y - 1, start_pos.x)
 
     def move_UPRIGHT(self, start_pos):
-        if start_pos[0] % 2 == 1:
-            return (start_pos[0] - 1, start_pos[1])
+        if start_pos.y % 2 == 1:
+            return YX(start_pos.y - 1, start_pos.x)
         else:
-            return (start_pos[0] - 1, start_pos[1] + 1)
+            return YX(start_pos.y - 1, start_pos.x + 1)
 
     def move_DOWNLEFT(self, start_pos):
-        if start_pos[0] % 2 == 1:
-             return (start_pos[0] + 1, start_pos[1] - 1)
+        if start_pos.y % 2 == 1:
+             return YX(start_pos.y + 1, start_pos.x - 1)
         else:
-               return (start_pos[0] + 1, start_pos[1])
+               return YX(start_pos.y + 1, start_pos.x)
 
     def move_DOWNRIGHT(self, start_pos):
-        if start_pos[0] % 2 == 1:
-            return (start_pos[0] + 1, start_pos[1])
+        if start_pos.y % 2 == 1:
+            return YX(start_pos.y + 1, start_pos.x)
         else:
-            return (start_pos[0] + 1, start_pos[1] + 1)
+            return YX(start_pos.y + 1, start_pos.x + 1)
 
 
 
@@ -146,7 +159,7 @@ class FovMap:
     def __init__(self, source_map, yx):
         self.source_map = source_map
         self.size = self.source_map.size
-        self.fov_radius = (self.size[0] / 2) - 0.5
+        self.fov_radius = (self.size.y / 2) - 0.5
         self.terrain = '?' * self.size_i
         self[yx] = '.'
         self.shadow_cones = []
@@ -223,8 +236,8 @@ class FovMap:
         """Move position pos into direction. Return whether still in map."""
         mover = getattr(self, 'move_' + direction)
         pos = mover(pos)
-        if pos[0] < 0 or pos[1] < 0 or \
-            pos[0] >= self.size[0] or pos[1] >= self.size[1]:
+        if pos.y < 0 or pos.x < 0 or \
+            pos.y >= self.size.y or pos.x >= self.size.x:
             return pos, False
         return pos, True
 
@@ -240,7 +253,7 @@ class FovMap:
         # TODO: get rid of circle_in_map logic
         circle_in_map = True
         distance = 1
-        yx = yx[:]
+        yx = YX(yx.y, yx.x)
         #print('DEBUG CIRCLE_OUT', yx)
         while circle_in_map:
             if distance > self.fov_radius:

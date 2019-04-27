@@ -1,11 +1,12 @@
 from plomrogue.errors import GameError
+from plomrogue.mapping import YX
 
 
 
 class ThingBase:
     type_ = '?'
 
-    def __init__(self, world, id_=None, position=((0,0), (0,0))):
+    def __init__(self, world, id_=None, position=(YX(0,0), YX(0,0))):
         self.world = world
         self.position = position
         if id_ is None:
@@ -87,7 +88,7 @@ class ThingAnimate(Thing):
             for pos in dijkstra_map:
                 if visible_map[pos] != '.':
                     continue
-                neighbors = dijkstra_map.get_neighbors(tuple(pos))
+                neighbors = dijkstra_map.get_neighbors(pos)
                 for direction in neighbors:
                     yx = neighbors[direction]
                     if yx is not None and dijkstra_map[yx] < dijkstra_map[pos] - 1:
@@ -111,13 +112,11 @@ class ThingAnimate(Thing):
         target = None
         for t in visible_things:
             if t.type_ == 'human':
-                target = (t.position[1][0] - offset[0],
-                          t.position[1][1] - offset[1])
+                target = t.position[1] - offset
                 break
         if target is not None:
             try:
-                offset_self_pos = (self.position[1][0] - offset[0],
-                                   self.position[1][1] - offset[1])
+                offset_self_pos = self.position[1] - offset
                 target_dir = self.move_on_dijkstra_map(offset_self_pos,
                                                        [target])
                 if target_dir is not None:
@@ -143,10 +142,8 @@ class ThingAnimate(Thing):
         food_targets = []
         for t in visible_things:
             if t.type_ == 'food':
-                food_targets += [(t.position[1][0] - offset[0],
-                                  t.position[1][1] - offset[1])]
-        offset_self_pos = (self.position[1][0] - offset[0],
-                           self.position[1][1] - offset[1])
+                food_targets += [t.position[1] - offset]
+        offset_self_pos = self.position[1] - offset
         target_dir = self.move_on_dijkstra_map(offset_self_pos,
                                                food_targets)
         if target_dir:
@@ -216,15 +213,15 @@ class ThingAnimate(Thing):
         self._surroundings_offset = None
 
     def must_fix_indentation(self):
-        return self._radius % 2 != self.position[1][0] % 2
+        return self._radius % 2 != self.position[1].y % 2
 
     def get_surroundings_offset(self):
         if self._surroundings_offset is not None:
             return self._surroundings_offset
         add_line = self.must_fix_indentation()
-        offset_y = self.position[1][0] - self._radius - int(add_line)
-        offset_x = self.position[1][1] - self._radius
-        self._surroundings_offset = (offset_y, offset_x)
+        offset = YX(self.position[1].y - self._radius - int(add_line),
+                    self.position[1].x - self._radius)
+        self._surroundings_offset = offset
         return self._surroundings_offset
 
     def get_surrounding_map(self):
@@ -244,15 +241,15 @@ class ThingAnimate(Thing):
 
         add_line = self.must_fix_indentation()
         self._surrounding_map = self.world.game.\
-                                map_type(size=(self._radius*2+1+int(add_line),
-                                               self._radius*2+1))
+                                map_type(size=YX(self._radius*2+1+int(add_line),
+                                                 self._radius*2+1))
         size = self.world.map_size
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
-            big_y, small_y = pan_and_scan(size[0], pos[0], offset[0])
-            big_x, small_x = pan_and_scan(size[1], pos[1], offset[1])
-            big_yx = (big_y, big_x)
-            small_yx = (small_y, small_x)
+            big_y, small_y = pan_and_scan(size.y, pos.y, offset.y)
+            big_x, small_x = pan_and_scan(size.x, pos.x, offset.x)
+            big_yx = YX(big_y, big_x)
+            small_yx = YX(small_y, small_x)
             self._surrounding_map[pos] = self.world.maps[big_yx][small_yx]
         return self._surrounding_map
 
@@ -265,8 +262,7 @@ class ThingAnimate(Thing):
             if surrounding_map[pos] in {'.', '~'}:
                 m[pos] = '.'
         offset = self.get_surroundings_offset()
-        fov_center = (self.position[1][0] - offset[0],
-                      self.position[1][1] - offset[1])
+        fov_center = self.position[1] - offset
         self._stencil = m.get_fov_map(fov_center)
         return self._stencil
 
@@ -296,12 +292,12 @@ class ThingAnimate(Thing):
         for thing in self.world.things:
             big_pos = thing.position[0]
             small_pos = thing.position[1]
-            pos_y = calc_pos_in_fov(big_pos[0], small_pos[0], offset[0], size[0])
-            pos_x = calc_pos_in_fov(big_pos[1], small_pos[1], offset[1], size[1])
+            pos_y = calc_pos_in_fov(big_pos.y, small_pos.y, offset.y, size.y)
+            pos_x = calc_pos_in_fov(big_pos.x, small_pos.x, offset.x, size.x)
             if pos_y < 0 or pos_x < 0 or\
-               pos_y >= fov_size[0] or pos_x >= fov_size[1]:
+               pos_y >= fov_size.y or pos_x >= fov_size.x:
                 continue
-            if (not thing.in_inventory) and stencil[(pos_y, pos_x)] == '.':
+            if (not thing.in_inventory) and stencil[YX(pos_y, pos_x)] == '.':
                 visible_things += [thing]
         return visible_things
 
@@ -312,7 +308,7 @@ class ThingAnimate(Thing):
                   isinstance(t, ThingItem) and
                   (t.position == self.position or
                    t.position[1] in
-                   self.world.maps[(0,0)].get_neighbors(self.position[1]).values())]:
+                   self.world.maps[YX(0,0)].get_neighbors(self.position[1]).values())]:
             pickable_ids += [t.id_]
         return pickable_ids
 

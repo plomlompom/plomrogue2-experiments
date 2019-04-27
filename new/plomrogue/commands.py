@@ -1,4 +1,4 @@
-from plomrogue.misc import quote, stringify_yx
+from plomrogue.misc import quote
 
 
 
@@ -104,18 +104,16 @@ def cmd_SAVE(game):
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
         write(f, 'SEED %s' % game.world.rand.prngod_seed)
-        write(f, 'MAP_SIZE ' + stringify_yx(game.world.map_size))
+        write(f, 'MAP_SIZE %s' % (game.world.map_size,))
         for map_pos in game.world.maps:
-            write(f, 'MAP ' + stringify_yx(map_pos))
+            write(f, 'MAP %s' % (map_pos,))
         for map_pos in game.world.maps:
             for y, line in game.world.maps[map_pos].lines():
-                 write(f, 'TERRAIN_LINE %s %5s %s' % (stringify_yx(map_pos),
-                                                      y, quote(line)))
+                 write(f, 'TERRAIN_LINE %s %5s %s' % (map_pos, y, quote(line)))
         for thing in game.world.things:
             write(f, 'THING_TYPE %s %s' % (thing.id_, thing.type_))
-            write(f, 'THING_POS %s %s %s' % (thing.id_,
-                                             stringify_yx(thing.position[0]),
-                                             stringify_yx(thing.position[1])))
+            write(f, 'THING_POS %s %s %s' % (thing.id_, thing.position[0],
+                                             thing.position[1]))
             if hasattr(thing, 'health'):
                 write(f, 'THING_HEALTH %s %s' % (thing.id_, thing.health))
             if len(thing.inventory) > 0:

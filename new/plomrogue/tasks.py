@@ -1,5 +1,6 @@
 from plomrogue.errors import GameError
 from plomrogue.misc import quote
+from plomrogue.mapping import YX
 
 
 
@@ -38,10 +39,10 @@ class Task_MOVE(Task):
     argtypes = 'string:direction'
 
     def check(self):
-        test_pos = ((0,0),
-                    self.thing.world.maps[(0,0)].
+        test_pos = (YX(0,0),
+                    self.thing.world.maps[YX(0,0)].
                     move(self.thing.position[1], self.args[0]))
-        if test_pos == ((0,0), None):
+        if test_pos == (YX(0,0), None):
             raise GameError('would move outside map bounds')
         if self.thing.world.maps[test_pos[0]][test_pos[1]] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
@@ -50,7 +51,7 @@ class Task_MOVE(Task):
                 raise GameError('%s would move into other thing' % self.thing.id_)
 
     def do(self):
-        self.thing.position = (0,0), self.thing.world.maps[(0,0)].\
+        self.thing.position = YX(0,0), self.thing.world.maps[YX(0,0)].\
                                      move(self.thing.position[1], self.args[0])
 
 
