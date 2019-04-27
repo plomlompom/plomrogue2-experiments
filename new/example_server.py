@@ -19,5 +19,5 @@ if os.path.exists(game_file_name):
             print("FILE INPUT LINE %5s: %s" % (i, line), end='')
             game.io.handle_input(line, store=False)
 else:
-    game.io.handle_input('GEN_WORLD Y:16,X:16 bar')
+    game.io.handle_input('GEN_WORLD Y:16,X:16 42')
 game.io.run_loop_with_server()

@@ -4,11 +4,15 @@ from plomrogue.misc import quote, stringify_yx
 
 def cmd_GEN_WORLD(game, yx, seed):
     game.world.make_new(yx, seed)
-cmd_GEN_WORLD.argtypes = 'yx_tuple:pos string'
+cmd_GEN_WORLD.argtypes = 'yx_tuple:pos int:nonneg'
 
 def cmd_GET_GAMESTATE(game, connection_id):
     """Send game state to caller."""
     game.send_gamestate(connection_id)
+
+def cmd_SEED(game, seed):
+    game.world.rand.prngod_seed = seed
+cmd_SEED.argtypes = 'int:nonneg'
 
 def cmd_MAP(game, map_pos, size):
     """Create new map of size at position map_pos, and only '?' cells."""
@@ -90,6 +94,7 @@ def cmd_SAVE(game):
     save_file_name = game.io.game_file_name + '.save'
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
+        write(f, 'SEED %s' % game.world.rand.prngod_seed)
         for map_pos in game.world.maps:
             write(f, 'MAP ' + stringify_yx(map_pos) + ' ' +
                   stringify_yx(game.world.maps[(0,0)].size))

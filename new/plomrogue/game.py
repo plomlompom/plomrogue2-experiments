@@ -4,7 +4,7 @@ from plomrogue.errors import ArgError, GameError
 from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
                                 cmd_MAP, cmd_MAP, cmd_THING_TYPE,
                                 cmd_THING_POS, cmd_THING_INVENTORY,
-                                cmd_THING_HEALTH,
+                                cmd_THING_HEALTH, cmd_SEED,
                                 cmd_GET_PICKABLE_ITEMS,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID,
                                 cmd_TURN, cmd_SWITCH_PLAYER, cmd_SAVE)
@@ -14,6 +14,23 @@ from plomrogue.io import GameIO
 from plomrogue.misc import quote, stringify_yx
 from plomrogue.things import Thing, ThingMonster, ThingHuman, ThingFood
 import random
+
+
+
+class PRNGod(random.Random):
+
+    def seed(self, seed):
+        self.prngod_seed = seed
+
+    def getstate(self):
+        return self.prngod_seed
+
+    def setstate(seed):
+        self.seed(seed)
+
+    def random(self):
+        self.prngod_seed = ((self.prngod_seed * 1103515245) + 12345) % 2**32
+        return (self.prngod_seed >> 16) / (2**16 - 1)
 
 
 
@@ -50,6 +67,7 @@ class World(WorldBase):
         self.player_id = 0
         self.player_is_alive = True
         self.maps = {}
+        self.rand = PRNGod(0)
 
     @property
     def player(self):
@@ -85,7 +103,7 @@ class World(WorldBase):
             for pos in self.maps[(0,0)]:
                 if self.maps[(0,0)][pos] == '.' and \
                    len(self.things_at_pos(((0,0), pos))) == 0 and \
-                   random.random() > 0.999:
+                   self.rand.random() > 0.999:
                     self.add_thing_at('food', ((0,0), pos))
             for thing in self.things[:player_i]:
                 thing.proceed()
@@ -104,8 +122,8 @@ class World(WorldBase):
         def add_thing_at_random(type_):
             while True:
                 new_pos = ((0,0),
-                           (random.randint(0, yx[0] -1),
-                            random.randint(0, yx[1] -1)))
+                           (self.rand.randint(0, yx[0] -1),
+                            self.rand.randint(0, yx[1] -1)))
                 if self.maps[new_pos[0]][new_pos[1]] != '.':
                     continue
                 if len(self.things_at_pos(new_pos)) > 0:
@@ -113,7 +131,7 @@ class World(WorldBase):
                 return self.add_thing_at(type_, new_pos)
 
         self.things = []
-        random.seed(seed)
+        self.rand.seed(seed)
         self.turn = 0
         self.maps = {}
         self.new_map((0,0), yx)
@@ -129,7 +147,7 @@ class World(WorldBase):
             map_ = self.maps[map_pos]
             if (0,0) == map_pos:
                 for pos in map_:
-                    map_[pos] = random.choice(('.', '.', '.', '.', 'x'))
+                    map_[pos] = self.rand.choice(('.', '.', '.', '.', 'x'))
             else:
                 for pos in map_:
                     map_[pos] = '~'
@@ -157,6 +175,7 @@ class Game:
                       'DROP': Task_DROP}
         self.commands = {'GEN_WORLD': cmd_GEN_WORLD,
                          'GET_GAMESTATE': cmd_GET_GAMESTATE,
+                         'SEED': cmd_SEED,
                          'MAP': cmd_MAP,
                          'THING_TYPE': cmd_THING_TYPE,
                          'THING_POS': cmd_THING_POS,
