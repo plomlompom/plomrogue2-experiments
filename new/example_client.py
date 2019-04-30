@@ -33,10 +33,12 @@ class ClientMap(Map):
                 cut_end = cut_start + view_width
             map_lines[:] = [line[cut_start:cut_end] for line in map_lines]
 
-    def format_to_view(self, map_cells, center, size):
+    def format_to_view(self, map_cells, center, size, indent_first_line):
 
         def map_cells_to_lines(map_cells):
-            map_view_chars = ['0']
+            map_view_chars = []
+            if indent_first_line:
+                map_view_chars += ['0']
             x = 0
             y = 0
             for cell in map_cells:
@@ -49,19 +51,14 @@ class ClientMap(Map):
                     map_view_chars += ['\n']
                     x = 0
                     y += 1
-                    if y % 2 == 0:
+                    if y % 2 == int(not indent_first_line):
                         map_view_chars += ['0']
-            if y % 2 == 0:
+            if y % 2 == int(not indent_first_line):
                 map_view_chars = map_view_chars[:-1]
             map_view_chars = map_view_chars[:-1]
             return ''.join(map_view_chars).split('\n')
 
         map_lines = map_cells_to_lines(map_cells)
-        if len(map_lines) % 2 == 0:
-            map_lines = map_lines[1:]
-        else:
-            for i in range(len(map_lines)):
-                map_lines[i] = '0' + map_lines[i]
         self.y_cut(map_lines, center[1].y, size.y)
         map_width = self.size.x * 2 + 1
         self.x_cut(map_lines, center[1].x * 2, size.x, map_width)
@@ -464,8 +461,10 @@ class MapWidget(Widget):
         center = self.tui.game.world.player.position
         if self.tui.examiner_mode:
             center = self.tui.examiner_position
+        indent_first_line = not bool(self.tui.game.world.offset.y % 2)
         lines = self.tui.game.world.map_.\
-                format_to_view(annotated_terrain, center, self.size)
+                format_to_view(annotated_terrain, center, self.size,
+                               indent_first_line)
         pad_or_cut_x(lines)
         pad_y(lines)
         self.safe_write(lines_to_colored_chars(lines))

@@ -237,24 +237,20 @@ class ThingAnimate(Thing):
         self._surrounding_map = None
         self._surroundings_offset = None
 
-    def must_fix_indentation(self):
-        return self._radius % 2 != self.position[1].y % 2
-
     def get_surroundings_offset(self):
         if self._surroundings_offset is not None:
             return self._surroundings_offset
-        add_line = self.must_fix_indentation()
-        offset = YX(self.position[0].y * self.world.game.map_size.y + self.position[1].y - self._radius - int(add_line),
-                    self.position[0].x * self.world.game.map_size.x + self.position[1].x - self._radius)
+        offset = YX(self.position[0].y * self.world.game.map_size.y +
+                    self.position[1].y - self._radius,
+                    self.position[0].x * self.world.game.map_size.x +
+                    self.position[1].x - self._radius)
         self._surroundings_offset = offset
         return self._surroundings_offset
 
     def get_surrounding_map(self):
         if self._surrounding_map is not None:
             return self._surrounding_map
-        add_line = self.must_fix_indentation()
-        self._surrounding_map = Map(size=YX(self._radius*2+1+int(add_line),
-                                            self._radius*2+1))
+        self._surrounding_map = Map(size=YX(self._radius*2+1, self._radius*2+1))
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
             offset_pos = pos + offset
@@ -273,8 +269,7 @@ class ThingAnimate(Thing):
         for pos in surrounding_map:
             if surrounding_map[pos] in {'.', '~'}:
                 m[pos] = '.'
-        add_line = self.must_fix_indentation()
-        fov_center = YX((add_line + m.size.y) // 2, m.size.x // 2)
+        fov_center = YX((m.size.y) // 2, m.size.x // 2)
         self._stencil = FovMapHex(m, fov_center)
         return self._stencil
 
