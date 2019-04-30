@@ -279,7 +279,7 @@ class ThingAnimate(Thing):
 
     def get_visible_map(self):
         stencil = self.get_stencil()
-        m = Map(self.surroundings.size, ' ')
+        m = Map(self.surroundings.size, ' ', self.surroundings.start_indented)
         for pos in m:
             if stencil[pos] == '.':
                 m[pos] = self.surroundings[pos]

@@ -94,10 +94,12 @@ class Parser:
     def argsparse(self, signature, args_tokens):
         """Parse into / return args_tokens as args defined by signature.
 
-        Expects signature to be a ' '-delimited sequence of any of the strings
-        'int:nonneg', 'yx_tuple', 'yx_tuple:nonneg', 'yx_tuple:pos', 'string',
-        'seq:int:nonneg', 'string:' + an option type string accepted by
-        self.game.get_string_options, defining the respective argument types.
+        Expects signature to be a ' '-delimited sequence of any of the
+        strings 'bool', 'int:nonneg', 'yx_tuple', 'yx_tuple:nonneg',
+        'yx_tuple:pos', 'string', 'seq:int:nonneg', 'string:' + an
+        option type string accepted by self.game.get_string_options,
+        defining the respective argument types.
+
         """
         tmpl_tokens = signature.split()
         if len(tmpl_tokens) != len(args_tokens):
@@ -109,7 +111,11 @@ class Parser:
         for i in range(len(tmpl_tokens)):
             tmpl = tmpl_tokens[i]
             arg = args_tokens[i]
-            if tmpl == 'int:nonneg':
+            if tmpl == 'bool':
+                if arg not in {'True', 'False'}:
+                    raise ArgError('Argument must be "True" or "False".')
+                args += [True if arg == 'True' else False]
+            elif tmpl == 'int:nonneg':
                 if not arg.isdigit():
                     raise ArgError('Argument must be non-negative integer.')
                 args += [int(arg)]
@@ -147,7 +153,7 @@ class Parser:
                     raise ArgError(msg)
                 args += [arg]
             else:
-                raise ArgError('Unknown argument type.')
+                raise ArgError('Unknown argument type: %s' % tmpl)
         return args
 
 

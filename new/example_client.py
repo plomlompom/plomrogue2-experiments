@@ -33,11 +33,11 @@ class ClientMap(Map):
                 cut_end = cut_start + view_width
             map_lines[:] = [line[cut_start:cut_end] for line in map_lines]
 
-    def format_to_view(self, map_cells, center, size, indent_first_line):
+    def format_to_view(self, map_cells, center, size):
 
         def map_cells_to_lines(map_cells):
             map_view_chars = []
-            if indent_first_line:
+            if self.start_indented:
                 map_view_chars += ['0']
             x = 0
             y = 0
@@ -51,9 +51,9 @@ class ClientMap(Map):
                     map_view_chars += ['\n']
                     x = 0
                     y += 1
-                    if y % 2 == int(not indent_first_line):
+                    if y % 2 == int(not self.start_indented):
                         map_view_chars += ['0']
-            if y % 2 == int(not indent_first_line):
+            if y % 2 == int(not self.start_indented):
                 map_view_chars = map_view_chars[:-1]
             map_view_chars = map_view_chars[:-1]
             return ''.join(map_view_chars).split('\n')
@@ -85,9 +85,9 @@ def cmd_TURN(game, n):
 cmd_TURN.argtypes = 'int:nonneg'
 
 
-def cmd_VISIBLE_MAP(game, offset, size):
-    game.new_map(offset, size)
-cmd_VISIBLE_MAP.argtypes = 'yx_tuple yx_tuple:pos'
+def cmd_VISIBLE_MAP(game, size, indent_first_line):
+    game.new_map(size, indent_first_line)
+cmd_VISIBLE_MAP.argtypes = 'yx_tuple:pos bool'
 
 
 def cmd_VISIBLE_MAP_LINE(game, y, terrain_line):
@@ -153,9 +153,8 @@ class Game(GameBase):
         self.do_quit = False
         self.tui = None
 
-    def new_map(self, offset, size):
-        self.map_ = ClientMap(size)
-        self.offset = offset
+    def new_map(self, size, indent_first_line):
+        self.map_ = ClientMap(size, start_indented=indent_first_line)
 
     @property
     def player(self):
@@ -449,10 +448,8 @@ class MapWidget(Widget):
         center = self.tui.game.player.position
         if self.tui.examiner_mode:
             center = self.tui.examiner_position
-        indent_first_line = not bool(self.tui.game.offset.y % 2)
         lines = self.tui.game.map_.\
-                format_to_view(annotated_terrain, center, self.size,
-                               indent_first_line)
+                format_to_view(annotated_terrain, center, self.size)
         pad_or_cut_x(lines)
         pad_y(lines)
         self.safe_write(lines_to_colored_chars(lines))

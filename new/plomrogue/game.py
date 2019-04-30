@@ -114,8 +114,8 @@ class Game(GameBase):
 
         self.io.send('TURN ' + str(self.turn))
         visible_map = self.player.get_visible_map()
-        self.io.send('VISIBLE_MAP %s %s' % (self.player.view_offset,
-                                            visible_map.size))
+        self.io.send('VISIBLE_MAP %s %s' % (visible_map.size,
+                                            visible_map.start_indented))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things = self.player.get_visible_things()
