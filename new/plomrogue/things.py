@@ -147,15 +147,14 @@ class ThingAnimate(Thing):
 
     def hunt_player(self):
         visible_things = self.get_visible_things()
-        offset = self.get_surroundings_offset()
         target = None
         for t in visible_things:
             if t.type_ == 'human':
-                target = t.position[1] - offset
+                target = t.position[1] - self.view_offset
                 break
         if target is not None:
             try:
-                offset_self_pos = self.position[1] - offset
+                offset_self_pos = self.position[1] - self.view_offset
                 target_dir = self.move_on_dijkstra_map(offset_self_pos,
                                                        [target])
                 if target_dir is not None:
@@ -177,12 +176,11 @@ class ThingAnimate(Thing):
                 self.set_task('PICKUP', (id_,))
                 return True
         visible_things = self.get_visible_things()
-        offset = self.get_surroundings_offset()
         food_targets = []
         for t in visible_things:
             if t.type_ == 'food':
-                food_targets += [t.position[1] - offset]
-        offset_self_pos = self.position[1] - offset
+                food_targets += [t.position[1] - self.view_offset]
+        offset_self_pos = self.position[1] - self.view_offset
         target_dir = self.move_on_dijkstra_map(offset_self_pos,
                                                food_targets)
         if target_dir:
@@ -249,25 +247,21 @@ class ThingAnimate(Thing):
     def unset_surroundings(self):
         self._stencil = None
         self._surrounding_map = None
-        self._surroundings_offset = None
 
-    def get_surroundings_offset(self):
-        if self._surroundings_offset is not None:
-            return self._surroundings_offset
-        y_long = self.position[0].y * self.game.map_size.y + self.position[1].y
-        x_long = self.position[0].x * self.game.map_size.x + self.position[1].x
-        yx_to_origin = YX(y_long, x_long)
-        self._surroundings_offset = yx_to_origin - YX(self._radius, self._radius)
-        return self._surroundings_offset
+    @property
+    def view_offset(self):
+        return self.game.map_geometry.get_view_offset(self.game.map_size,
+                                                      self.position,
+                                                      self._radius)
 
     def get_surrounding_map(self):
         if self._surrounding_map is not None:
             return self._surrounding_map
         self._surrounding_map = Map(size=YX(self._radius*2+1, self._radius*2+1))
-        offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
             correct = self.game.map_geometry.correct_double_coordinate
-            big_yx, small_yx = correct(self.game.map_size, (0,0), pos + offset)
+            big_yx, small_yx = correct(self.game.map_size, (0,0),
+                                       pos + self.view_offset)
             map_ = self.game.get_map(big_yx, False)
             if map_ is None:
                 map_ = Map(size=self.game.map_size)
@@ -296,12 +290,11 @@ class ThingAnimate(Thing):
 
     def get_visible_things(self):
         stencil = self.get_stencil()
-        offset = self.get_surroundings_offset()
         visible_things = []
         for thing in self.game.things:
-            pos = self.game.map_geometry.pos_in_projection(thing.position,
-                                                           offset,
-                                                           self.game.map_size)
+            pos = self.game.map_geometry.pos_in_view(thing.position,
+                                                     self.view_offset,
+                                                     self.game.map_size)
             if pos.y < 0 or pos.x < 0 or\
                pos.y >= stencil.size.y or pos.x >= stencil.size.x:
                 continue

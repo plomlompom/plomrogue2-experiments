@@ -85,10 +85,17 @@ class MapGeometry():
         self.neighbors_to[map_size][pos] = neighbors
         return neighbors
 
-    def pos_in_projection(self, pos, offset, maps_size):
-        pos_y = pos[1].y + (maps_size.y * pos[0].y) - offset.y
-        pos_x = pos[1].x + (maps_size.x * pos[0].x) - offset.x
-        return YX(pos_y, pos_x)
+    def undouble_coordinate(self, maps_size, coordinate):
+        y = maps_size.y * coordinate[0].y + coordinate[1].y
+        x = maps_size.x * coordinate[0].x + coordinate[1].x
+        return YX(y, x)
+
+    def get_view_offset(self, maps_size, center, radius):
+        yx_to_origin = self.undouble_coordinate(maps_size, center)
+        return yx_to_origin - YX(radius, radius)
+
+    def pos_in_view(self, pos, offset, maps_size):
+        return self.undouble_coordinate(maps_size, pos) - offset
 
     def correct_double_coordinate(self, map_size, big_yx, little_yx):
 

@@ -105,22 +105,22 @@ class Game(GameBase):
     def send_gamestate(self, connection_id=None):
         """Send out game state data relevant to clients."""
 
-        def send_thing(offset, thing):
-            offset_pos = self.map_geometry.pos_in_projection(thing.position,
-                                                             offset,
-                                                             self.map_size)
+        def send_thing(thing):
+            view_pos = self.map_geometry.pos_in_view(thing.position,
+                                                     self.player.view_offset,
+                                                     self.map_size)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
-            self.io.send('THING_POS %s %s' % (thing.id_, offset_pos))
+            self.io.send('THING_POS %s %s' % (thing.id_, view_pos))
 
         self.io.send('TURN ' + str(self.turn))
         visible_map = self.player.get_visible_map()
-        offset = self.player.get_surroundings_offset()
-        self.io.send('VISIBLE_MAP %s %s' % (offset, visible_map.size))
+        self.io.send('VISIBLE_MAP %s %s' % (self.player.view_offset,
+                                            visible_map.size))
         for y, line in visible_map.lines():
             self.io.send('VISIBLE_MAP_LINE %5s %s' % (y, quote(line)))
         visible_things = self.player.get_visible_things()
         for thing in visible_things:
-            send_thing(offset, thing)
+            send_thing(thing)
             if hasattr(thing, 'health'):
                 self.io.send('THING_HEALTH %s %s' % (thing.id_,
                                                      thing.health))
@@ -131,7 +131,7 @@ class Game(GameBase):
             self.io.send('PLAYER_INVENTORY ,')
         for id_ in self.player.inventory:
             thing = self.get_thing(id_)
-            send_thing(offset, thing)
+            send_thing(thing)
         self.io.send('GAME_STATE_COMPLETE')
 
     def proceed(self):
