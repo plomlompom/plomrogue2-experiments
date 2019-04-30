@@ -254,11 +254,10 @@ class ThingAnimate(Thing):
     def get_surroundings_offset(self):
         if self._surroundings_offset is not None:
             return self._surroundings_offset
-        offset = YX(self.position[0].y * self.game.map_size.y +
-                    self.position[1].y - self._radius,
-                    self.position[0].x * self.game.map_size.x +
-                    self.position[1].x - self._radius)
-        self._surroundings_offset = offset
+        y_long = self.position[0].y * self.game.map_size.y + self.position[1].y
+        x_long = self.position[0].x * self.game.map_size.x + self.position[1].x
+        yx_to_origin = YX(y_long, x_long)
+        self._surroundings_offset = yx_to_origin - YX(self._radius, self._radius)
         return self._surroundings_offset
 
     def get_surrounding_map(self):
@@ -267,9 +266,8 @@ class ThingAnimate(Thing):
         self._surrounding_map = Map(size=YX(self._radius*2+1, self._radius*2+1))
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
-            offset_pos = pos + offset
-            absolutize = self.game.map_geometry.absolutize_coordinate
-            big_yx, small_yx = absolutize(self.game.map_size, (0,0), offset_pos)
+            correct = self.game.map_geometry.correct_double_coordinate
+            big_yx, small_yx = correct(self.game.map_size, (0,0), pos + offset)
             map_ = self.game.get_map(big_yx, False)
             if map_ is None:
                 map_ = Map(size=self.game.map_size)

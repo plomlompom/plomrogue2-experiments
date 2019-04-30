@@ -90,7 +90,7 @@ class MapGeometry():
         pos_x = pos[1].x + (maps_size.x * pos[0].x) - offset.x
         return YX(pos_y, pos_x)
 
-    def absolutize_coordinate(self, map_size, big_yx, little_yx):
+    def correct_double_coordinate(self, map_size, big_yx, little_yx):
 
         def adapt_axis(axis):
             maps_crossed = little_yx[axis] // map_size[axis]
@@ -105,8 +105,9 @@ class MapGeometry():
     def move(self, start_pos, direction, map_size):
         mover = getattr(self, 'move_' + direction)
         big_yx, little_yx = start_pos
-        unadapted_target = mover(little_yx)
-        return self.absolutize_coordinate(map_size, big_yx, unadapted_target)
+        uncorrected_target = mover(little_yx)
+        return self.correct_double_coordinate(map_size, big_yx,
+                                              uncorrected_target)
 
 
 
