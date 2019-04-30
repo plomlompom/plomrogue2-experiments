@@ -8,7 +8,7 @@ from plomrogue.commands import (cmd_GEN_WORLD, cmd_GET_GAMESTATE,
                                 cmd_GET_PICKABLE_ITEMS, cmd_MAP_SIZE,
                                 cmd_TERRAIN_LINE, cmd_PLAYER_ID,
                                 cmd_TURN, cmd_SWITCH_PLAYER, cmd_SAVE)
-from plomrogue.mapping import MapHex, YX
+from plomrogue.mapping import MapGeometryHex, Map, YX
 from plomrogue.parser import Parser
 from plomrogue.io import GameIO
 from plomrogue.misc import quote
@@ -67,7 +67,6 @@ class World(WorldBase):
         self.player_id = 0
         self.player_is_alive = True
         self.maps = {}
-        self.map_size = YX(1,1)
         self.rand = PRNGod(0)
 
     @property
@@ -81,11 +80,11 @@ class World(WorldBase):
 
     def get_map(self, map_pos, create_unfound=True):
         if not (map_pos in self.maps and
-                self.maps[map_pos].size == self.map_size):
+                self.maps[map_pos].size == self.game.map_size):
             if create_unfound:
-                self.maps[map_pos] = self.game.map_type(self.map_size)
+                self.maps[map_pos] = Map(self.game.map_size)
                 for pos in self.maps[map_pos]:
-                    self.maps[map_pos][pos] = '~'
+                    self.maps[map_pos][pos] = '.'
             else:
                 return None
         return self.maps[map_pos]
@@ -143,10 +142,10 @@ class World(WorldBase):
         self.rand.seed(seed)
         self.turn = 0
         self.maps = {}
-        self.map_size = yx
+        self.game.map_size = yx
         map_ = self.get_map(YX(0,0))
         for pos in map_:
-            map_[pos] = self.rand.choice(('.', '.', '.', '.', 'x'))
+            map_[pos] = self.rand.choice(('.', '.', '.', '~', 'x'))
         player = add_thing_at_random('human')
         self.player_id = player.id_
         add_thing_at_random('monster')
@@ -163,7 +162,8 @@ class Game:
 
     def __init__(self, game_file_name):
         self.io = GameIO(game_file_name, self)
-        self.map_type = MapHex
+        self.map_size = None
+        self.map_geometry = MapGeometryHex()
         self.tasks = {'WAIT': Task_WAIT,
                       'MOVE': Task_MOVE,
                       'PICKUP': Task_PICKUP,
@@ -193,7 +193,7 @@ class Game:
 
     def get_string_options(self, string_option_type):
         if string_option_type == 'direction':
-            return self.map_type().get_directions()
+            return self.map_geometry.get_directions()
         elif string_option_type == 'thingtype':
             return list(self.thing_types.keys())
         return None
@@ -202,7 +202,9 @@ class Game:
         """Send out game state data relevant to clients."""
 
         def send_thing(offset, thing):
-            offset_pos = (thing.position[1] - offset)
+            offset_pos = self.map_geometry.pos_in_projection(thing.position,
+                                                             offset,
+                                                             self.map_size)
             self.io.send('THING_TYPE %s %s' % (thing.id_, thing.type_))
             self.io.send('THING_POS %s %s' % (thing.id_, offset_pos))
 

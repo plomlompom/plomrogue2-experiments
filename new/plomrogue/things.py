@@ -1,5 +1,5 @@
 from plomrogue.errors import GameError
-from plomrogue.mapping import YX
+from plomrogue.mapping import YX, Map, FovMapHex
 
 
 
@@ -60,18 +60,18 @@ class Thing(ThingBase):
         edge_up = self.position[1].y - self._radius
         edge_down = self.position[1].y + self._radius
         if edge_left < 0:
-            self.world.get_map(self.position[0] - YX(1,-1))
-            self.world.get_map(self.position[0] - YX(0,-1))
-            self.world.get_map(self.position[0] - YX(-1,-1))
-        if edge_right >= self.world.map_size.x:
+            self.world.get_map(self.position[0] + YX(1,-1))
+            self.world.get_map(self.position[0] + YX(0,-1))
+            self.world.get_map(self.position[0] + YX(-1,-1))
+        if edge_right >= self.world.game.map_size.x:
             self.world.get_map(self.position[0] + YX(1,1))
             self.world.get_map(self.position[0] + YX(0,1))
             self.world.get_map(self.position[0] + YX(-1,1))
         if edge_up < 0:
-            self.world.get_map(self.position[0] - YX(-1,1))
-            self.world.get_map(self.position[0] - YX(-1,0))
-            self.world.get_map(self.position[0] - YX(-1,-1))
-        if edge_down >= self.world.map_size.y:
+            self.world.get_map(self.position[0] + YX(-1,1))
+            self.world.get_map(self.position[0] + YX(-1,0))
+            self.world.get_map(self.position[0] + YX(-1,-1))
+        if edge_down >= self.world.game.map_size.y:
             self.world.get_map(self.position[0] + YX(1,1))
             self.world.get_map(self.position[0] + YX(1,0))
             self.world.get_map(self.position[0] + YX(1,-1))
@@ -99,7 +99,7 @@ class ThingAnimate(Thing):
 
     def move_on_dijkstra_map(self, own_pos, targets):
         visible_map = self.get_visible_map()
-        dijkstra_map = self.world.game.map_type(visible_map.size)
+        dijkstra_map = Map(visible_map.size)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
         for target in targets:
@@ -110,19 +110,22 @@ class ThingAnimate(Thing):
             for pos in dijkstra_map:
                 if visible_map[pos] != '.':
                     continue
-                neighbors = dijkstra_map.get_neighbors(pos)
+                neighbors = self.world.game.map_geometry.get_neighbors((YX(0,0), pos),
+                                                                       dijkstra_map.size)
                 for direction in neighbors:
-                    yx = neighbors[direction]
-                    if yx is not None and dijkstra_map[yx] < dijkstra_map[pos] - 1:
-                        dijkstra_map[pos] = dijkstra_map[yx] + 1
+                    big_yx, small_yx = neighbors[direction]
+                    if big_yx == YX(0,0) and \
+                       dijkstra_map[small_yx] < dijkstra_map[pos] - 1:
+                        dijkstra_map[pos] = dijkstra_map[small_yx] + 1
                         shrunk = True
-        neighbors = dijkstra_map.get_neighbors(own_pos)
+        neighbors = self.world.game.map_geometry.get_neighbors((YX(0,0), own_pos),
+                                                               dijkstra_map.size)
         n = n_max
         target_direction = None
         for direction in sorted(neighbors.keys()):
-            yx = neighbors[direction]
-            if yx is not None:
-                n_new = dijkstra_map[yx]
+            big_yx, small_yx = neighbors[direction]
+            if big_yx == (0,0):
+                n_new = dijkstra_map[small_yx]
                 if n_new < n:
                     n = n_new
                     target_direction = direction
@@ -241,40 +244,24 @@ class ThingAnimate(Thing):
         if self._surroundings_offset is not None:
             return self._surroundings_offset
         add_line = self.must_fix_indentation()
-        offset = YX(self.position[1].y - self._radius - int(add_line),
-                    self.position[1].x - self._radius)
+        offset = YX(self.position[0].y * self.world.game.map_size.y + self.position[1].y - self._radius - int(add_line),
+                    self.position[0].x * self.world.game.map_size.x + self.position[1].x - self._radius)
         self._surroundings_offset = offset
         return self._surroundings_offset
 
     def get_surrounding_map(self):
         if self._surrounding_map is not None:
             return self._surrounding_map
-
-        def pan_and_scan(size_of_axis, pos, offset):
-            big_pos = 0
-            small_pos = pos + offset
-            if small_pos < 0:
-                big_pos = -1
-                small_pos = size_of_axis + small_pos
-            elif small_pos >= size_of_axis:
-                big_pos = 1
-                small_pos = small_pos - size_of_axis
-            return big_pos, small_pos
-
         add_line = self.must_fix_indentation()
-        self._surrounding_map = self.world.game.\
-                                map_type(size=YX(self._radius*2+1+int(add_line),
-                                                 self._radius*2+1))
-        size = self.world.map_size
+        self._surrounding_map = Map(size=YX(self._radius*2+1+int(add_line),
+                                            self._radius*2+1))
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
-            big_y, small_y = pan_and_scan(size.y, pos.y, offset.y)
-            big_x, small_x = pan_and_scan(size.x, pos.x, offset.x)
-            big_yx = YX(big_y, big_x)
-            small_yx = YX(small_y, small_x)
+            offset_pos = pos + offset
+            big_yx, small_yx = self.world.game.map_geometry.absolutize_coordinate(self.world.game.map_size, (0,0), offset_pos)
             map_ = self.world.get_map(big_yx, False)
             if map_ is None:
-                map_ = self.world.game.map_type(size=self.world.map_size)
+                map_ = Map(size=self.world.game.map_size)
             self._surrounding_map[pos] = map_[small_yx]
         return self._surrounding_map
 
@@ -282,58 +269,47 @@ class ThingAnimate(Thing):
         if self._stencil is not None:
             return self._stencil
         surrounding_map = self.get_surrounding_map()
-        m = surrounding_map.new_from_shape(' ')
+        m = Map(surrounding_map.size, ' ')
         for pos in surrounding_map:
             if surrounding_map[pos] in {'.', '~'}:
                 m[pos] = '.'
-        offset = self.get_surroundings_offset()
-        fov_center = self.position[1] - offset
-        self._stencil = m.get_fov_map(fov_center)
+        add_line = self.must_fix_indentation()
+        fov_center = YX((add_line + m.size.y) // 2, m.size.x // 2)
+        self._stencil = FovMapHex(m, fov_center)
         return self._stencil
 
     def get_visible_map(self):
         stencil = self.get_stencil()
-        m = self.get_surrounding_map().new_from_shape(' ')
+        m = Map(self.get_surrounding_map().size, ' ')
         for pos in m:
             if stencil[pos] == '.':
                 m[pos] = self._surrounding_map[pos]
         return m
 
     def get_visible_things(self):
-
-        def calc_pos_in_fov(big_pos, small_pos, offset, size_of_axis):
-            pos = small_pos - offset
-            if big_pos == -1:
-                pos = small_pos - size_of_axis - offset
-            elif big_pos == 1:
-                pos = small_pos + size_of_axis - offset
-            return pos
-
         stencil = self.get_stencil()
         offset = self.get_surroundings_offset()
         visible_things = []
-        size = self.world.map_size
-        fov_size = self.get_surrounding_map().size
         for thing in self.world.things:
-            big_pos = thing.position[0]
-            small_pos = thing.position[1]
-            pos_y = calc_pos_in_fov(big_pos.y, small_pos.y, offset.y, size.y)
-            pos_x = calc_pos_in_fov(big_pos.x, small_pos.x, offset.x, size.x)
-            if pos_y < 0 or pos_x < 0 or\
-               pos_y >= fov_size.y or pos_x >= fov_size.x:
+            pos = self.world.game.map_geometry.pos_in_projection(thing.position,
+                                                                 offset,
+                                                                 self.world.game.map_size)
+            if pos.y < 0 or pos.x < 0 or\
+               pos.y >= stencil.size.y or pos.x >= stencil.size.x:
                 continue
-            if (not thing.in_inventory) and stencil[YX(pos_y, pos_x)] == '.':
+            if (not thing.in_inventory) and stencil[pos] == '.':
                 visible_things += [thing]
         return visible_things
 
     def get_pickable_items(self):
         pickable_ids = []
         visible_things = self.get_visible_things()
-        for t in [t for t in visible_things if
-                  isinstance(t, ThingItem) and
+        neighbor_fields = self.world.game.map_geometry.get_neighbors(self.position,
+                                                                     self.world.game.map_size)
+        for t in [t for t in visible_things
+                  if isinstance(t, ThingItem) and
                   (t.position == self.position or
-                   t.position[1] in
-                   self.world.maps[YX(0,0)].get_neighbors(self.position[1]).values())]:
+                   t.position in neighbor_fields.values())]:
             pickable_ids += [t.id_]
         return pickable_ids
 

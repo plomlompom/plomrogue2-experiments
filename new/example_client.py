@@ -5,14 +5,14 @@ import threading
 from plomrogue.parser import ArgError, Parser
 from plomrogue.commands import cmd_PLAYER_ID, cmd_THING_HEALTH
 from plomrogue.game import Game, WorldBase
-from plomrogue.mapping import MapHex, YX
+from plomrogue.mapping import Map, MapGeometryHex, YX
 from plomrogue.io import PlomSocket
 from plomrogue.things import ThingBase
 import types
 import queue
 
 
-class ClientMap(MapHex):
+class ClientMap(Map):
 
     def y_cut(self, map_lines, center_y, view_height):
         map_height = len(map_lines)
@@ -62,9 +62,9 @@ class ClientMap(MapHex):
         else:
             for i in range(len(map_lines)):
                 map_lines[i] = '0' + map_lines[i]
-        self.y_cut(map_lines, center.y, size.y)
+        self.y_cut(map_lines, center[1].y, size.y)
         map_width = self.size.x * 2 + 1
-        self.x_cut(map_lines, center.x * 2, size.x, map_width)
+        self.x_cut(map_lines, center[1].x * 2, size.x, map_width)
         return map_lines
 
 
@@ -136,7 +136,7 @@ cmd_THING_TYPE.argtypes = 'int:nonneg string'
 
 def cmd_THING_POS(game, i, yx):
     t = game.world.get_thing(i)
-    t.position = yx
+    t.position = YX(0,0), yx
 cmd_THING_POS.argtypes = 'int:nonneg yx_tuple:nonneg'
 
 
@@ -157,6 +157,7 @@ class Game:
     def __init__(self):
         self.parser = Parser(self)
         self.world = World(self)
+        self.map_geometry = MapGeometryHex()
         self.thing_type = ThingBase
         self.commands = {'LAST_PLAYER_TASK_RESULT': cmd_LAST_PLAYER_TASK_RESULT,
                          'TURN_FINISHED': cmd_TURN_FINISHED,
@@ -203,8 +204,6 @@ class Game:
     def log(self, msg):
         """Prefix msg plus newline to self.log_text."""
         self.log_text = msg + '\n' + self.log_text
-        with open('log', 'w') as f:
-            f.write(self.log_text)
         self.tui.to_update['log'] = True
 
     def symbol_for_type(self, type_):
@@ -338,7 +337,7 @@ class DescriptorWidget(TextLinesWidget):
     def get_text_lines(self):
         lines = []
         pos_i = self.tui.game.world.map_.\
-                get_position_index(self.tui.examiner_position)
+                get_position_index(self.tui.examiner_position[1])
         terrain = self.tui.game.world.map_.terrain[pos_i]
         lines = [terrain]
         for t in self.tui.game.world.things_at_pos(self.tui.examiner_position):
@@ -408,7 +407,7 @@ class MapWidget(Widget):
                 if t.id_ in self.tui.game.world.player_inventory:
                     continue
                 pos_i = self.tui.game.world.map_.\
-                        get_position_index(t.position)
+                        get_position_index(t.position[1])
                 symbol = self.tui.game.symbol_for_type(t.type_)
                 if terrain_as_list[pos_i][0] in {'f', '@', 'm'}:
                     old_symbol = terrain_as_list[pos_i][0]
@@ -419,7 +418,7 @@ class MapWidget(Widget):
                     terrain_as_list[pos_i] = symbol
             if self.tui.examiner_mode:
                 pos_i = self.tui.game.world.map_.\
-                        get_position_index(self.tui.examiner_position)
+                        get_position_index(self.tui.examiner_position[1])
                 terrain_as_list[pos_i] = (terrain_as_list[pos_i][0], '?')
             return terrain_as_list
 
@@ -570,8 +569,9 @@ class TUI:
 
         def move_examiner(direction):
             start_pos = self.examiner_position
-            new_examine_pos = self.game.world.map_.move(start_pos, direction)
-            if new_examine_pos:
+            new_examine_pos = self.game.map_geometry.move(start_pos, direction,
+                                                          self.game.world.map_.size)
+            if new_examine_pos[0] == (0,0):
                 self.examiner_position = new_examine_pos
             self.to_update['map'] = True
 

@@ -18,9 +18,9 @@ class YX(collections.namedtuple('YX', ('y', 'x'))):
 
 class Map:
 
-    def __init__(self, size=YX(0, 0)):
+    def __init__(self, size=YX(0, 0), init_char = '?'):
         self.size = size
-        self.terrain = '?'*self.size_i
+        self.terrain = init_char*self.size_i
 
     def __getitem__(self, yx):
         return self.terrain[self.get_position_index(yx)]
@@ -61,8 +61,9 @@ class Map:
         for y in range(self.size.y):
             yield (y, self.terrain[y * width:(y + 1) * width])
 
-    def get_fov_map(self, yx):
-        return self.fov_map_type(self, yx)
+
+
+class MapGeometry():
 
     def get_directions(self):
         directions = []
@@ -71,38 +72,45 @@ class Map:
                 directions += [name[5:]]
         return directions
 
-    def get_neighbors(self, pos):
+    def get_neighbors(self, pos, map_size):
         neighbors = {}
         if not hasattr(self, 'neighbors_to'):
             self.neighbors_to = {}
-        if pos in self.neighbors_to:
-            return self.neighbors_to[pos]
+        if not map_size in self.neighbors_to:
+            self.neighbors_to[map_size] = {}
+        if pos in self.neighbors_to[map_size]:
+            return self.neighbors_to[map_size][pos]
         for direction in self.get_directions():
-            neighbors[direction] = None
-            neighbor_pos = self.move(pos, direction)
-            if neighbor_pos:
-                neighbors[direction] = neighbor_pos
-        self.neighbors_to[pos] = neighbors
+            neighbors[direction] = self.move(pos, direction, map_size)
+        self.neighbors_to[map_size][pos] = neighbors
         return neighbors
 
-    def new_from_shape(self, init_char):
-        import copy
-        new_map = copy.deepcopy(self)
-        for pos in new_map:
-            new_map[pos] = init_char
-        return new_map
+    def pos_in_projection(self, pos, offset, maps_size):
+        pos_y = pos[1].y + (maps_size.y * pos[0].y) - offset.y
+        pos_x = pos[1].x + (maps_size.x * pos[0].x) - offset.x
+        return YX(pos_y, pos_x)
 
-    def move(self, start_pos, direction):
+    def absolutize_coordinate(self, map_size, big_yx, little_yx):
+
+        def adapt_axis(axis):
+            maps_crossed = little_yx[axis] // map_size[axis]
+            new_big = big_yx[axis] + maps_crossed
+            new_little = little_yx[axis] % map_size[axis]
+            return new_big, new_little
+
+        new_big_y, new_little_y = adapt_axis(0)
+        new_big_x, new_little_x = adapt_axis(1)
+        return YX(new_big_y, new_big_x), YX(new_little_y, new_little_x)
+
+    def move(self, start_pos, direction, map_size):
         mover = getattr(self, 'move_' + direction)
-        new_pos = mover(start_pos)
-        if new_pos.y < 0 or new_pos.x < 0 or \
-                new_pos.y >= self.size.y or new_pos.x >= self.size.x:
-            return None
-        return new_pos
+        big_yx, little_yx = start_pos
+        unadapted_target = mover(little_yx)
+        return self.absolutize_coordinate(map_size, big_yx, unadapted_target)
 
 
 
-class MapWithLeftRightMoves(Map):
+class MapGeometryWithLeftRightMoves(MapGeometry):
 
     def move_LEFT(self, start_pos):
         return YX(start_pos.y, start_pos.x - 1)
@@ -112,7 +120,7 @@ class MapWithLeftRightMoves(Map):
 
 
 
-class MapSquare(MapWithLeftRightMoves):
+class MapGeometrySquare(MapGeometryWithLeftRightMoves):
 
     def move_UP(self, start_pos):
         return YX(start_pos.y - 1, start_pos.x)
@@ -122,7 +130,7 @@ class MapSquare(MapWithLeftRightMoves):
 
 
 
-class MapHex(MapWithLeftRightMoves):
+class MapGeometryHex(MapGeometryWithLeftRightMoves):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -154,16 +162,16 @@ class MapHex(MapWithLeftRightMoves):
 
 
 
-class FovMap:
+class FovMap(Map):
 
-    def __init__(self, source_map, yx):
+    def __init__(self, source_map, center):
         self.source_map = source_map
         self.size = self.source_map.size
         self.fov_radius = (self.size.y / 2) - 0.5
         self.terrain = '?' * self.size_i
-        self[yx] = '.'
+        self[center] = '.'
         self.shadow_cones = []
-        self.circle_out(yx, self.shadow_process_hex)
+        self.circle_out(center, self.shadow_process_hex)
 
     def shadow_process_hex(self, yx, distance_to_center, dir_i, dir_progress):
         # Possible optimization: If no shadow_cones yet and self[yx] == '.',
@@ -234,7 +242,7 @@ class FovMap:
 
     def basic_circle_out_move(self, pos, direction):
         """Move position pos into direction. Return whether still in map."""
-        mover = getattr(self, 'move_' + direction)
+        mover = getattr(self.geometry, 'move_' + direction)
         pos = mover(pos)
         if pos.y < 0 or pos.x < 0 or \
             pos.y >= self.size.y or pos.x >= self.size.x:
@@ -271,19 +279,28 @@ class FovMap:
 
 
 
-class FovMapHex(FovMap, MapHex):
+class FovMapHex(FovMap):
     circle_out_directions = ('DOWNLEFT', 'LEFT', 'UPLEFT',
                              'UPRIGHT', 'RIGHT', 'DOWNRIGHT')
+
+    def __init__(self, *args, **kwargs):
+        self.geometry = MapGeometryHex()
+        super().__init__(*args, **kwargs)
 
     def circle_out_move(self, yx, direction):
         return self.basic_circle_out_move(yx, direction)
 
 
 
-class FovMapSquare(FovMap, MapSquare):
+class FovMapSquare(FovMap):
     circle_out_directions = (('DOWN', 'LEFT'), ('LEFT', 'UP'),
                              ('UP', 'RIGHT'), ('RIGHT', 'DOWN'))
+
+    def __init__(self, *args, **kwargs):
+        self.geometry = MapGeometrySquare()
+        super().__init__(*args, **kwargs)
 
     def circle_out_move(self, yx, direction):
         self.basic_circle_out_move(yx, direction[0])
         return self.basic_circle_out_move(yx, direction[1])
+

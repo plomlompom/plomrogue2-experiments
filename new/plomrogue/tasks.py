@@ -38,12 +38,13 @@ class Task_WAIT(Task):
 class Task_MOVE(Task):
     argtypes = 'string:direction'
 
+    def get_move_target(self):
+        return self.thing.world.game.map_geometry.move(self.thing.position,
+                                                       self.args[0],
+                                                       self.thing.world.game.map_size)
+
     def check(self):
-        test_pos = (YX(0,0),
-                    self.thing.world.maps[YX(0,0)].
-                    move(self.thing.position[1], self.args[0]))
-        if test_pos == (YX(0,0), None):
-            raise GameError('would move outside map bounds')
+        test_pos = self.get_move_target()
         if self.thing.world.maps[test_pos[0]][test_pos[1]] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
         for t in self.thing.world.things_at_pos(test_pos):
@@ -51,8 +52,7 @@ class Task_MOVE(Task):
                 raise GameError('%s would move into other thing' % self.thing.id_)
 
     def do(self):
-        self.thing.position = YX(0,0), self.thing.world.maps[YX(0,0)].\
-                                     move(self.thing.position[1], self.args[0])
+        self.thing.position = self.get_move_target()
 
 
 

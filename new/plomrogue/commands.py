@@ -15,7 +15,7 @@ def cmd_SEED(game, seed):
 cmd_SEED.argtypes = 'int:nonneg'
 
 def cmd_MAP_SIZE(game, size):
-    game.world.map_size = size
+    game.map_size = size
 cmd_MAP_SIZE.argtypes = 'yx_tuple:pos'
 
 def cmd_MAP(game, map_pos):
@@ -104,7 +104,7 @@ def cmd_SAVE(game):
     with open(save_file_name, 'w') as f:
         write(f, 'TURN %s' % game.world.turn)
         write(f, 'SEED %s' % game.world.rand.prngod_seed)
-        write(f, 'MAP_SIZE %s' % (game.world.map_size,))
+        write(f, 'MAP_SIZE %s' % (game.map_size,))
         for map_pos in game.world.maps:
             write(f, 'MAP %s' % (map_pos,))
         for map_pos in game.world.maps:
