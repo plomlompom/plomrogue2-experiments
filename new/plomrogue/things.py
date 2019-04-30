@@ -134,8 +134,14 @@ class ThingAnimate(Thing):
                        dijkstra_map[small_yx] < dijkstra_map[pos] - 1:
                         dijkstra_map[pos] = dijkstra_map[small_yx] + 1
                         shrunk = True
-        get_neighbors((YX(0,0), own_pos), dijkstra_map.size,
-                      dijkstra_map.start_indented)
+        #print('DEBUG DIJKSTRA ---------------------', self.id_, self.position)
+        #for y, line in dijkstra_map.lines():
+        #    line_to_print = []
+        #    for x in line:
+        #        line_to_print += ['%3s' % x]
+        #    print(' '.join(line_to_print))
+        neighbors = get_neighbors((YX(0,0), own_pos), dijkstra_map.size,
+                                  dijkstra_map.start_indented)
         n = n_max
         target_direction = None
         for direction in sorted(neighbors.keys()):
@@ -147,24 +153,24 @@ class ThingAnimate(Thing):
                     target_direction = direction
         return target_direction
 
-    def hunt_player(self):
-        visible_things = self.get_visible_things()
-        target = None
-        for t in visible_things:
-            if t.type_ == 'human':
-                target = t.position[1] - self.view_offset
-                break
-        if target is not None:
-            try:
-                offset_self_pos = self.position[1] - self.view_offset
-                target_dir = self.move_on_dijkstra_map(offset_self_pos,
-                                                       [target])
-                if target_dir is not None:
-                    self.set_task('MOVE', (target_dir,))
-                    return True
-            except GameError:
-                pass
-        return False
+    #def hunt_player(self):
+    #    visible_things = self.get_visible_things()
+    #    target = None
+    #    for t in visible_things:
+    #        if t.type_ == 'human':
+    #            target = t.position[1] - self.view_offset
+    #            break
+    #    if target is not None:
+    #        try:
+    #            offset_self_pos = self.position[1] - self.view_offset
+    #            target_dir = self.move_on_dijkstra_map(offset_self_pos,
+    #                                                   [target])
+    #            if target_dir is not None:
+    #                self.set_task('MOVE', (target_dir,))
+    #                return True
+    #        except GameError:
+    #            pass
+    #    return False
 
     def hunt_food_satisfaction(self):
         for id_ in self.inventory:
@@ -181,8 +187,12 @@ class ThingAnimate(Thing):
         food_targets = []
         for t in visible_things:
             if t.type_ == 'food':
-                food_targets += [t.position[1] - self.view_offset]
-        offset_self_pos = self.position[1] - self.view_offset
+                food_targets += [self.game.map_geometry.pos_in_view(t.position,
+                                                                    self.view_offset,
+                                                                    self.game.map_size)]
+        offset_self_pos = self.game.map_geometry.pos_in_view(self.position,
+                                                             self.view_offset,
+                                                             self.game.map_size)
         target_dir = self.move_on_dijkstra_map(offset_self_pos,
                                                food_targets)
         if target_dir:
