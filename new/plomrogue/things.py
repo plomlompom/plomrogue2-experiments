@@ -113,27 +113,29 @@ class ThingAnimate(Thing):
 
     def move_on_dijkstra_map(self, own_pos, targets):
         visible_map = self.get_visible_map()
-        dijkstra_map = Map(visible_map.size)
+        dijkstra_map = Map(visible_map.size,
+                           start_indented=visible_map.start_indented)
         n_max = 256
         dijkstra_map.terrain = [n_max for i in range(dijkstra_map.size_i)]
         for target in targets:
             dijkstra_map[target] = 0
         shrunk = True
+        get_neighbors = self.game.map_geometry.get_neighbors
         while shrunk:
             shrunk = False
             for pos in dijkstra_map:
                 if visible_map[pos] != '.':
                     continue
-                neighbors = self.game.map_geometry.get_neighbors((YX(0,0), pos),
-                                                                 dijkstra_map.size)
+                neighbors = get_neighbors((YX(0,0), pos), dijkstra_map.size,
+                                          dijkstra_map.start_indented)
                 for direction in neighbors:
                     big_yx, small_yx = neighbors[direction]
                     if big_yx == YX(0,0) and \
                        dijkstra_map[small_yx] < dijkstra_map[pos] - 1:
                         dijkstra_map[pos] = dijkstra_map[small_yx] + 1
                         shrunk = True
-        neighbors = self.game.map_geometry.get_neighbors((YX(0,0), own_pos),
-                                                         dijkstra_map.size)
+        get_neighbors((YX(0,0), own_pos), dijkstra_map.size,
+                      dijkstra_map.start_indented)
         n = n_max
         target_direction = None
         for direction in sorted(neighbors.keys()):
@@ -267,7 +269,7 @@ class ThingAnimate(Thing):
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        m = Map(self.surroundings.size, ' ')
+        m = Map(self.surroundings.size, ' ', self.surroundings.start_indented)
         for pos in self.surroundings:
             if self.surroundings[pos] in {'.', '~'}:
                 m[pos] = '.'

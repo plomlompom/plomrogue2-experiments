@@ -18,9 +18,10 @@ class YX(collections.namedtuple('YX', ('y', 'x'))):
 
 class Map:
 
-    def __init__(self, size=YX(0, 0), init_char = '?'):
+    def __init__(self, size=YX(0, 0), init_char = '?', start_indented=True):
         self.size = size
         self.terrain = init_char*self.size_i
+        self.start_indented = start_indented
 
     def __getitem__(self, yx):
         return self.terrain[self.get_position_index(yx)]
@@ -72,17 +73,20 @@ class MapGeometry():
                 directions += [name[5:]]
         return directions
 
-    def get_neighbors(self, pos, map_size):
+    def get_neighbors(self, pos, map_size, start_indented=True):
         neighbors = {}
         if not hasattr(self, 'neighbors_to'):
             self.neighbors_to = {}
         if not map_size in self.neighbors_to:
             self.neighbors_to[map_size] = {}
-        if pos in self.neighbors_to[map_size]:
-            return self.neighbors_to[map_size][pos]
+        if not start_indented in self.neighbors_to[map_size]:
+            self.neighbors_to[map_size][start_indented] = {}
+        if pos in self.neighbors_to[map_size][start_indented]:
+            return self.neighbors_to[map_size][start_indented][pos]
         for direction in self.get_directions():
-            neighbors[direction] = self.move(pos, direction, map_size)
-        self.neighbors_to[map_size][pos] = neighbors
+            neighbors[direction] = self.move(pos, direction, map_size,
+                                             start_indented)
+        self.neighbors_to[map_size][start_indented][pos] = neighbors
         return neighbors
 
     def undouble_coordinate(self, maps_size, coordinate):
@@ -98,7 +102,8 @@ class MapGeometry():
         return self.undouble_coordinate(maps_size, pos) - offset
 
     def get_view(self, maps_size, get_map, radius, view_offset):
-        m = Map(size=YX(radius*2+1, radius*2+1)
+        m = Map(size=YX(radius*2+1, radius*2+1),
+                start_indented=(view_offset.y % 2 == 0))
         for pos in m:
             seen_pos = self.correct_double_coordinate(maps_size, (0,0),
                                                       pos + view_offset)
@@ -107,9 +112,6 @@ class MapGeometry():
                 seen_map = Map(size=maps_size)
             m[pos] = seen_map[seen_pos[1]]
         return m
-
-    def get_correcting_map_size(self, size, offset):
-        return size
 
     def correct_double_coordinate(self, map_size, big_yx, little_yx):
 
@@ -123,10 +125,10 @@ class MapGeometry():
         new_big_x, new_little_x = adapt_axis(1)
         return YX(new_big_y, new_big_x), YX(new_little_y, new_little_x)
 
-    def move(self, start_pos, direction, map_size):
+    def move(self, start_pos, direction, map_size, start_indented=True):
         mover = getattr(self, 'move_' + direction)
         big_yx, little_yx = start_pos
-        uncorrected_target = mover(little_yx)
+        uncorrected_target = mover(little_yx, start_indented)
         return self.correct_double_coordinate(map_size, big_yx,
                                               uncorrected_target)
 
@@ -134,20 +136,20 @@ class MapGeometry():
 
 class MapGeometryWithLeftRightMoves(MapGeometry):
 
-    def move_LEFT(self, start_pos):
+    def move_LEFT(self, start_pos, _):
         return YX(start_pos.y, start_pos.x - 1)
 
-    def move_RIGHT(self, start_pos):
+    def move_RIGHT(self, start_pos, _):
         return YX(start_pos.y, start_pos.x + 1)
 
 
 
 class MapGeometrySquare(MapGeometryWithLeftRightMoves):
 
-    def move_UP(self, start_pos):
+    def move_UP(self, start_pos, _):
         return YX(start_pos.y - 1, start_pos.x)
 
-    def move_DOWN(self, start_pos):
+    def move_DOWN(self, start_pos, _):
         return YX(start_pos.y + 1, start_pos.x)
 
 
@@ -158,29 +160,30 @@ class MapGeometryHex(MapGeometryWithLeftRightMoves):
         super().__init__(*args, **kwargs)
         self.fov_map_type = FovMapHex
 
-    def move_UPLEFT(self, start_pos):
-        if start_pos.y % 2 == 1:
+    def move_UPLEFT(self, start_pos, start_indented):
+        if start_pos.y % 2 == start_indented:
             return YX(start_pos.y - 1, start_pos.x - 1)
         else:
             return YX(start_pos.y - 1, start_pos.x)
 
-    def move_UPRIGHT(self, start_pos):
-        if start_pos.y % 2 == 1:
+    def move_UPRIGHT(self, start_pos, start_indented):
+        if start_pos.y % 2 == start_indented:
             return YX(start_pos.y - 1, start_pos.x)
         else:
             return YX(start_pos.y - 1, start_pos.x + 1)
 
-    def move_DOWNLEFT(self, start_pos):
-        if start_pos.y % 2 == 1:
+    def move_DOWNLEFT(self, start_pos, start_indented):
+        if start_pos.y % 2 == start_indented:
              return YX(start_pos.y + 1, start_pos.x - 1)
         else:
                return YX(start_pos.y + 1, start_pos.x)
 
-    def move_DOWNRIGHT(self, start_pos):
-        if start_pos.y % 2 == 1:
+    def move_DOWNRIGHT(self, start_pos, start_indented):
+        if start_pos.y % 2 == start_indented:
             return YX(start_pos.y + 1, start_pos.x)
         else:
             return YX(start_pos.y + 1, start_pos.x + 1)
+
 
 
 class FovMap(Map):
@@ -189,6 +192,7 @@ class FovMap(Map):
         self.source_map = source_map
         self.size = self.source_map.size
         self.fov_radius = (self.size.y / 2) - 0.5
+        self.start_indented = source_map.start_indented
         self.terrain = '?' * self.size_i
         self[center] = '.'
         self.shadow_cones = []
@@ -264,7 +268,7 @@ class FovMap(Map):
     def basic_circle_out_move(self, pos, direction):
         """Move position pos into direction. Return whether still in map."""
         mover = getattr(self.geometry, 'move_' + direction)
-        pos = mover(pos)
+        pos = mover(pos, self.start_indented)
         if pos.y < 0 or pos.x < 0 or \
             pos.y >= self.size.y or pos.x >= self.size.x:
             return pos, False
