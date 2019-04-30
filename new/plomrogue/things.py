@@ -6,10 +6,10 @@ from plomrogue.mapping import YX, Map, FovMapHex
 class ThingBase:
     type_ = '?'
 
-    def __init__(self, world, id_=None, position=(YX(0,0), YX(0,0))):
-        self.world = world
+    def __init__(self, game, id_=None, position=(YX(0,0), YX(0,0))):
+        self.game = game
         if id_ is None:
-            self.id_ = self.world.new_thing_id()
+            self.id_ = self.game.new_thing_id()
         else:
             self.id_ = id_
         self.position = position
@@ -51,30 +51,44 @@ class Thing(ThingBase):
     def _position_set(self, pos):
         super()._position_set(pos)
         for t_id in self.inventory:
-            t = self.world.get_thing(t_id)
+            t = self.game.get_thing(t_id)
             t.position = self.position
-        if not self.id_ == self.world.player_id:
+        if not self.id_ == self.game.player_id:
             return
         edge_left = self.position[1].x - self._radius
         edge_right = self.position[1].x + self._radius
         edge_up = self.position[1].y - self._radius
         edge_down = self.position[1].y + self._radius
         if edge_left < 0:
-            self.world.get_map(self.position[0] + YX(1,-1))
-            self.world.get_map(self.position[0] + YX(0,-1))
-            self.world.get_map(self.position[0] + YX(-1,-1))
-        if edge_right >= self.world.game.map_size.x:
-            self.world.get_map(self.position[0] + YX(1,1))
-            self.world.get_map(self.position[0] + YX(0,1))
-            self.world.get_map(self.position[0] + YX(-1,1))
+            self.game.get_map(self.position[0] + YX(1,-1))
+            self.game.get_map(self.position[0] + YX(0,-1))
+            self.game.get_map(self.position[0] + YX(-1,-1))
+        if edge_right >= self.game.map_size.x:
+            self.game.get_map(self.position[0] + YX(1,1))
+            self.game.get_map(self.position[0] + YX(0,1))
+            self.game.get_map(self.position[0] + YX(-1,1))
         if edge_up < 0:
-            self.world.get_map(self.position[0] + YX(-1,1))
-            self.world.get_map(self.position[0] + YX(-1,0))
-            self.world.get_map(self.position[0] + YX(-1,-1))
-        if edge_down >= self.world.game.map_size.y:
-            self.world.get_map(self.position[0] + YX(1,1))
-            self.world.get_map(self.position[0] + YX(1,0))
-            self.world.get_map(self.position[0] + YX(1,-1))
+            self.game.get_map(self.position[0] + YX(-1,1))
+            self.game.get_map(self.position[0] + YX(-1,0))
+            self.game.get_map(self.position[0] + YX(-1,-1))
+        if edge_down >= self.game.map_size.y:
+            self.game.get_map(self.position[0] + YX(1,1))
+            self.game.get_map(self.position[0] + YX(1,0))
+            self.game.get_map(self.position[0] + YX(1,-1))
+        #alternative
+        #if self.position[1].x < self._radius:
+        #    self.game.get_map(self.position[0] - YX(0,1))
+        #if self.position[1].y < self._radius:
+        #    self.game.get_map(self.position[0] - YX(1,0))
+        #if self.position[1].x > self.game.map_size.x - self._radius:
+        #    self.game.get_map(self.position[0] + YX(0,1))
+        #if self.position[1].y > self.game.map_size.y - self._radius:
+        #    self.game.get_map(self.position[0] + YX(1,0))
+        #if self.position[1].y < self._radius and \
+        #   self.position[1].x <= [pos for pos in
+        #                          diagonal_distance_edge
+        #                          if pos.y == self.position[1].y][0].x:
+        #    self.game.get_map(self.position[0] - YX(1,1))
 
 
 
@@ -110,16 +124,16 @@ class ThingAnimate(Thing):
             for pos in dijkstra_map:
                 if visible_map[pos] != '.':
                     continue
-                neighbors = self.world.game.map_geometry.get_neighbors((YX(0,0), pos),
-                                                                       dijkstra_map.size)
+                neighbors = self.game.map_geometry.get_neighbors((YX(0,0), pos),
+                                                                 dijkstra_map.size)
                 for direction in neighbors:
                     big_yx, small_yx = neighbors[direction]
                     if big_yx == YX(0,0) and \
                        dijkstra_map[small_yx] < dijkstra_map[pos] - 1:
                         dijkstra_map[pos] = dijkstra_map[small_yx] + 1
                         shrunk = True
-        neighbors = self.world.game.map_geometry.get_neighbors((YX(0,0), own_pos),
-                                                               dijkstra_map.size)
+        neighbors = self.game.map_geometry.get_neighbors((YX(0,0), own_pos),
+                                                         dijkstra_map.size)
         n = n_max
         target_direction = None
         for direction in sorted(neighbors.keys()):
@@ -153,12 +167,12 @@ class ThingAnimate(Thing):
 
     def hunt_food_satisfaction(self):
         for id_ in self.inventory:
-            t = self.world.get_thing(id_)
+            t = self.game.get_thing(id_)
             if t.type_ == 'food':
                 self.set_task('EAT', (id_,))
                 return True
         for id_ in self.get_pickable_items():
-            t = self.world.get_thing(id_)
+            t = self.game.get_thing(id_)
             if t.type_ == 'food':
                 self.set_task('PICKUP', (id_,))
                 return True
@@ -185,7 +199,7 @@ class ThingAnimate(Thing):
             self.set_task('WAIT')
 
     def set_task(self, task_name, args=()):
-        task_class = self.world.game.tasks[task_name]
+        task_class = self.game.tasks[task_name]
         self.task = task_class(self, args)
         self.task.check()  # will throw GameError if necessary
 
@@ -193,8 +207,8 @@ class ThingAnimate(Thing):
         """Further the thing in its tasks, decrease its health.
 
         First, ensures an empty map, decrements .health and kills
-        thing if crossing zero (removes from self.world.things for AI
-        thing, or unsets self.world.player_is_alive for player thing);
+        thing if crossing zero (removes from self.game.things for AI
+        thing, or unsets self.game.player_is_alive for player thing);
         then checks that self.task is still possible and aborts if
         otherwise (for AI things, decides a new task).
 
@@ -206,10 +220,10 @@ class ThingAnimate(Thing):
         self.unset_surroundings()
         self.health -= 1
         if self.health <= 0:
-            if self is self.world.player:
-                self.world.player_is_alive = False
+            if self is self.game.player:
+                self.game.player_is_alive = False
             else:
-                del self.world.things[self.world.things.index(self)]
+                del self.game.things[self.game.things.index(self)]
             return
         try:
             self.task.check()
@@ -240,9 +254,9 @@ class ThingAnimate(Thing):
     def get_surroundings_offset(self):
         if self._surroundings_offset is not None:
             return self._surroundings_offset
-        offset = YX(self.position[0].y * self.world.game.map_size.y +
+        offset = YX(self.position[0].y * self.game.map_size.y +
                     self.position[1].y - self._radius,
-                    self.position[0].x * self.world.game.map_size.x +
+                    self.position[0].x * self.game.map_size.x +
                     self.position[1].x - self._radius)
         self._surroundings_offset = offset
         return self._surroundings_offset
@@ -254,10 +268,11 @@ class ThingAnimate(Thing):
         offset = self.get_surroundings_offset()
         for pos in self._surrounding_map:
             offset_pos = pos + offset
-            big_yx, small_yx = self.world.game.map_geometry.absolutize_coordinate(self.world.game.map_size, (0,0), offset_pos)
-            map_ = self.world.get_map(big_yx, False)
+            absolutize = self.game.map_geometry.absolutize_coordinate
+            big_yx, small_yx = absolutize(self.game.map_size, (0,0), offset_pos)
+            map_ = self.game.get_map(big_yx, False)
             if map_ is None:
-                map_ = Map(size=self.world.game.map_size)
+                map_ = Map(size=self.game.map_size)
             self._surrounding_map[pos] = map_[small_yx]
         return self._surrounding_map
 
@@ -285,10 +300,10 @@ class ThingAnimate(Thing):
         stencil = self.get_stencil()
         offset = self.get_surroundings_offset()
         visible_things = []
-        for thing in self.world.things:
-            pos = self.world.game.map_geometry.pos_in_projection(thing.position,
-                                                                 offset,
-                                                                 self.world.game.map_size)
+        for thing in self.game.things:
+            pos = self.game.map_geometry.pos_in_projection(thing.position,
+                                                           offset,
+                                                           self.game.map_size)
             if pos.y < 0 or pos.x < 0 or\
                pos.y >= stencil.size.y or pos.x >= stencil.size.x:
                 continue
@@ -299,8 +314,8 @@ class ThingAnimate(Thing):
     def get_pickable_items(self):
         pickable_ids = []
         visible_things = self.get_visible_things()
-        neighbor_fields = self.world.game.map_geometry.get_neighbors(self.position,
-                                                                     self.world.game.map_size)
+        neighbor_fields = self.game.map_geometry.get_neighbors(self.position,
+                                                               self.game.map_size)
         for t in [t for t in visible_things
                   if isinstance(t, ThingItem) and
                   (t.position == self.position or

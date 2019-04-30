@@ -39,15 +39,15 @@ class Task_MOVE(Task):
     argtypes = 'string:direction'
 
     def get_move_target(self):
-        return self.thing.world.game.map_geometry.move(self.thing.position,
-                                                       self.args[0],
-                                                       self.thing.world.game.map_size)
+        return self.thing.game.map_geometry.move(self.thing.position,
+                                                 self.args[0],
+                                                 self.thing.game.map_size)
 
     def check(self):
         test_pos = self.get_move_target()
-        if self.thing.world.maps[test_pos[0]][test_pos[1]] != '.':
+        if self.thing.game.maps[test_pos[0]][test_pos[1]] != '.':
             raise GameError('%s would move into illegal terrain' % self.thing.id_)
-        for t in self.thing.world.things_at_pos(test_pos):
+        for t in self.thing.game.things_at_pos(test_pos):
             if t.blocking:
                 raise GameError('%s would move into other thing' % self.thing.id_)
 
@@ -60,15 +60,15 @@ class Task_PICKUP(Task):
     argtypes = 'int:nonneg'
 
     def check(self):
-        to_pick_up = self.thing.world.get_thing(self.args[0],
-                                                create_unfound=False)
+        to_pick_up = self.thing.game.get_thing(self.args[0],
+                                               create_unfound=False)
         if to_pick_up is None or \
            to_pick_up.id_ not in self.thing.get_pickable_items():
             raise GameError('thing of ID %s not in reach to pick up'
                             % self.args[0])
 
     def do(self):
-        to_pick_up = self.thing.world.get_thing(self.args[0])
+        to_pick_up = self.thing.game.get_thing(self.args[0])
         self.thing.inventory += [self.args[0]]
         to_pick_up.in_inventory = True
         to_pick_up.position = self.thing.position
@@ -79,7 +79,7 @@ class TaskOnInventoryItem(Task):
     argtypes = 'int:nonneg'
 
     def _basic_inventory_item_check(self):
-        item = self.thing.world.get_thing(self.args[0], create_unfound=False)
+        item = self.thing.game.get_thing(self.args[0], create_unfound=False)
         if item is None:
             raise GameError('no thing of ID %s' % self.args[0])
         if item.id_ not in self.thing.inventory:
@@ -87,7 +87,7 @@ class TaskOnInventoryItem(Task):
         return item
 
     def _eliminate_from_inventory(self):
-        item = self.thing.world.get_thing(self.args[0])
+        item = self.thing.game.get_thing(self.args[0])
         del self.thing.inventory[self.thing.inventory.index(item.id_)]
         item.in_inventory = False
         return item
@@ -115,5 +115,5 @@ class Task_EAT(TaskOnInventoryItem):
 
     def do(self):
         to_eat = self._eliminate_from_inventory()
-        del self.thing.world.things[self.thing.world.things.index(to_eat)]
+        del self.thing.game.things[self.thing.game.things.index(to_eat)]
         self.thing.health += 50
