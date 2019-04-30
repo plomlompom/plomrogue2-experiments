@@ -246,7 +246,7 @@ class ThingAnimate(Thing):
 
     def unset_surroundings(self):
         self._stencil = None
-        self._surrounding_map = None
+        self._surroundings = None
 
     @property
     def view_offset(self):
@@ -254,27 +254,22 @@ class ThingAnimate(Thing):
                                                       self.position,
                                                       self._radius)
 
-    def get_surrounding_map(self):
-        if self._surrounding_map is not None:
-            return self._surrounding_map
-        self._surrounding_map = Map(size=YX(self._radius*2+1, self._radius*2+1))
-        for pos in self._surrounding_map:
-            correct = self.game.map_geometry.correct_double_coordinate
-            big_yx, small_yx = correct(self.game.map_size, (0,0),
-                                       pos + self.view_offset)
-            map_ = self.game.get_map(big_yx, False)
-            if map_ is None:
-                map_ = Map(size=self.game.map_size)
-            self._surrounding_map[pos] = map_[small_yx]
-        return self._surrounding_map
+    @property
+    def surroundings(self):
+        if self._surroundings is not None:
+            return self._surroundings
+        s = self.game.map_geometry.get_view(self.game.map_size,
+                                            self.game.get_map,
+                                            self._radius, self.view_offset)
+        self._surroundings = s
+        return self._surroundings
 
     def get_stencil(self):
         if self._stencil is not None:
             return self._stencil
-        surrounding_map = self.get_surrounding_map()
-        m = Map(surrounding_map.size, ' ')
-        for pos in surrounding_map:
-            if surrounding_map[pos] in {'.', '~'}:
+        m = Map(self.surroundings.size, ' ')
+        for pos in self.surroundings:
+            if self.surroundings[pos] in {'.', '~'}:
                 m[pos] = '.'
         fov_center = YX((m.size.y) // 2, m.size.x // 2)
         self._stencil = FovMapHex(m, fov_center)
@@ -282,10 +277,10 @@ class ThingAnimate(Thing):
 
     def get_visible_map(self):
         stencil = self.get_stencil()
-        m = Map(self.get_surrounding_map().size, ' ')
+        m = Map(self.surroundings.size, ' ')
         for pos in m:
             if stencil[pos] == '.':
-                m[pos] = self._surrounding_map[pos]
+                m[pos] = self.surroundings[pos]
         return m
 
     def get_visible_things(self):

@@ -97,6 +97,20 @@ class MapGeometry():
     def pos_in_view(self, pos, offset, maps_size):
         return self.undouble_coordinate(maps_size, pos) - offset
 
+    def get_view(self, maps_size, get_map, radius, view_offset):
+        m = Map(size=YX(radius*2+1, radius*2+1)
+        for pos in m:
+            seen_pos = self.correct_double_coordinate(maps_size, (0,0),
+                                                      pos + view_offset)
+            seen_map = get_map(seen_pos[0], False)
+            if seen_map is None:
+                seen_map = Map(size=maps_size)
+            m[pos] = seen_map[seen_pos[1]]
+        return m
+
+    def get_correcting_map_size(self, size, offset):
+        return size
+
     def correct_double_coordinate(self, map_size, big_yx, little_yx):
 
         def adapt_axis(axis):
@@ -167,7 +181,6 @@ class MapGeometryHex(MapGeometryWithLeftRightMoves):
             return YX(start_pos.y + 1, start_pos.x)
         else:
             return YX(start_pos.y + 1, start_pos.x + 1)
-
 
 
 class FovMap(Map):
