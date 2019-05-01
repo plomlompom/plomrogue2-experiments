@@ -554,7 +554,8 @@ class TUI:
         def move_examiner(direction):
             start_pos = self.examiner_position
             new_examine_pos = self.game.map_geometry.move(start_pos, direction,
-                                                          self.game.map_.size)
+                                                          self.game.map_.size,
+                                                          self.game.map_.start_indented)
             if new_examine_pos[0] == (0,0):
                 self.examiner_position = new_examine_pos
             self.to_update['map'] = True
