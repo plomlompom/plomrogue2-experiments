@@ -1,83 +1,96 @@
-def step(x):
-    step = 0  # If 0.5, we need no bias for AND and OR; if 0, none for NOT.
-              # With learning, the bias will slowly balance any choice.
-    if x >= step:
-        return 1
-    else:
-        return 0
+class Perceptron:
 
-def result(inputs):
-    s = 0
-    perceptron['inputs'] = inputs[:]
-    for i in range(len(inputs)):
-        s += inputs[i] * perceptron['weights'][i]
-    return step(s + perceptron['bias'])
+    def __init__(self, size):
+        self.n_inputs = size
+        self.weights = [0] * self.n_inputs
+        self.bias = 0
+
+    def output(self, inputs):
+        step = 0  # If 0.5, we need no bias for AND and OR; if 0, none for NOT.
+                  # With learning, the bias will slowly balance any choice.
+        weighted_inputs_sum = 0
+        for i in range(self.n_inputs):
+            weighted_inputs_sum += inputs[i] * self.weights[i]
+        if weighted_inputs_sum + self.bias >= step:
+            return 1
+        else:
+            return 0
+
+class TrainingUnit:
+
+    def __init__(self, inputs, target):
+        self.inputs = inputs
+        self.target = target
 
 # identity
-#training_set = [((0,), 0),
-#                ((1,), 1)]
+#training_set = [TrainingUnit((0,), 0),
+#                TrainingUnit((1,), 1)]
 
 # NOT
-#training_set = [((0,), 1),
-#                ((1,), 0)]
+#training_set = [TrainingUnit((0,), 1),
+#                TrainingUnit((1,), 0)]
 
 # AND
-#training_set = [((0,0), 0),
-#                ((1,0), 0),
-#                ((0,1), 0),
-#                ((1,1), 1)]
+#training_set = [TrainingUnit((0,0), 0),
+#                TrainingUnit((1,0), 0),
+#                TrainingUnit((0,1), 0),
+#                TrainingUnit((1,1), 1)]
 
 # OR
-#training_set = [((0,0), 0),
-#                ((1,0), 1),
-#                ((0,1), 1),
-#                ((1,1), 1)]
+#training_set = [TrainingUnit((0,0), 0),
+#                TrainingUnit((1,0), 1),
+#                TrainingUnit((0,1), 1),
+#                TrainingUnit((1,1), 1)]
 
 # NOT (with one irrelevant column)
-#training_set = [((0,0), 1),
-#                ((1,0), 0),
-#                ((0,1), 1),
-#                ((1,1), 0)]
+#training_set = [TrainingUnit((0,0), 0),
+#                TrainingUnit((1,0), 1),
+#                TrainingUnit((0,1), 0),
+#                TrainingUnit((1,1), 1)]
 
 # XOR (will fail, as Minsky/Papert say)
-#training_set = [((0,0), 0),
-#                ((1,0), 1),
-#                ((0,1), 1),
-#                ((1,1), 0)]
+#training_set = [TrainingUnit((0,0), 0),
+#                TrainingUnit((1,0), 1),
+#                TrainingUnit((0,1), 1),
+#                TrainingUnit((1,1), 0)]
 
 # 1 if above f(x)=x line, else 0
-training_set = [((0,1), 1),
-                ((2,3), 1),
-                ((1,1), 0),
-                ((2,2), 0)]
+training_set = [TrainingUnit((0,1), 1),
+                TrainingUnit((2,3), 1),
+                TrainingUnit((1,1), 0),
+                TrainingUnit((2,2), 0)]
 
 # 1 if above f(x)=x**2, else 0 (will fail: no linear separability)
-#training_set = [((2,4), 0),
-#                ((2,5), 1),
-#                ((3,9), 0),
-#                ((3,10), 1)]
+#training_set = [TrainingUnit((2,4), 0),
+#                TrainingUnit((2,5), 1),
+#                TrainingUnit((3,9), 0),
+#                TrainingUnit((3,10), 1)]
 
-perceptron = {'weights': [0 for i in range(len(training_set[0][0]))],
-              'bias': 0}
-adaption_size = 0.1
 
-for i in range(100):
+p = Perceptron(len(training_set[0].inputs))
+adaption_step = 0.1
+max_rounds = 100
+for i in range(max_rounds):
     print()
     go_on = False
-    for element in training_set:
-        inputs = element[0]
-        target = element[1]
-        result_ = result(inputs)
-        print("inputs %s target %s result %s correctness %5s weights %s bias %s" % (inputs, target, result_, target==result_, perceptron['weights'], perceptron['bias']))
-        if target != result_:
+    for unit in training_set:
+        result_ = p.output(unit.inputs)
+        formatted_inputs = []
+        for i in unit.inputs:
+            formatted_inputs += ['%2d' % i]
+        formatted_weights = []
+        for w in p.weights:
+            formatted_weights += ['% .1f' % w]
+        print("inputs (%s) target %s result %s correctness %5s weights [%s] bias % .1f" % (', '.join(formatted_inputs), unit.target, result_, unit.target==result_, ', '.join(formatted_weights), p.bias))
+        if unit.target != result_:
             go_on=True
-        perceptron['bias'] += adaption_size * (target - result_)
-        for i in range(len(perceptron['weights'])):
-            perceptron['weights'][i] += adaption_size * (target - result_) * perceptron['inputs'][i]
+        p.bias += adaption_step * (unit.target - result_)
+        for i in range(p.n_inputs):
+            p.weights[i] += adaption_step * (unit.target - result_) * unit.inputs[i]
     if not go_on:
         break
 print()
 if go_on:
-    print('COULD NOT SOLVE.')
+    print('COULD NOT SOLVE WITHIN %s ROUNDS.' % max_rounds)
 else:
-    print('SUCCESS')
+    print('SUCCESS.')
